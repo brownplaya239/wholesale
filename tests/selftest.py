@@ -426,10 +426,15 @@ def test_spark():
     hot = pd.DataFrame({"Property Address": ["99 Church St", "1 Nope Rd"],
                         "Property City": ["Belford", "Nowhere"],
                         "Property Zip Code": ["07718", "00000"]})
-    exp = s07.rows_to_frame([{
-        "UnparsedAddress": "99 CHURCH STREET, MIDDLETOWN, NJ 07718",
-        "City": "MIDDLETOWN", "PostalCode": "07718",
-        "StandardStatus": "Expired"}])
+    exp = s07.rows_to_frame([
+        {"UnparsedAddress": "99 CHURCH STREET, MIDDLETOWN, NJ 07718",
+         "City": "MIDDLETOWN", "PostalCode": "07718",
+         "StandardStatus": "Expired", "PropertyType": "Residential"},
+        {"UnparsedAddress": "99 CHURCH STREET, MIDDLETOWN, NJ 07718",
+         "City": "MIDDLETOWN", "PostalCode": "07718",
+         "StandardStatus": "Closed",
+         "PropertyType": "ResidentialLease"},
+    ])
     check(exp.iloc[0]["street"] == "99 CHURCH STREET"
           and exp.iloc[0]["zip"] == "07718",
           "spark: full-line address split into street + zip")
@@ -437,6 +442,13 @@ def test_spark():
     check(len(hits) == 1
           and hits.iloc[0]["Property Address"] == "99 Church St",
           "expireds: street+zip match beats municipality-vs-postal-city")
+    check(hits.iloc[0]["mls_type"] == "FAILED_SALE",
+          "expireds: FAILED_SALE outranks the closed-rental record")
+    check(s07.classify_listing("Closed", "ResidentialLease") == "RENTED"
+          and s07.classify_listing("Active", "Residential") == "LISTED_NOW"
+          and s07.classify_listing("Withdrawn", "Residential")
+          == "FAILED_SALE",
+          "expireds: status+type classification (server filter untrusted)")
     sup_zip = {("99 CHURCH ST", "07718")}
     check(nc.is_suppressed("99 Church Street", "Belford", "07718", sup_zip),
           "suppress: zip key matches across city-name mismatch")

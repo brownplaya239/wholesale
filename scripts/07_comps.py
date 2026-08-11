@@ -74,6 +74,8 @@ def rows_to_frame(rows: list[dict]) -> pd.DataFrame:
             "beds": pick(r, "BedroomsTotal"),
             "dom": pick(r, "DaysOnMarket", "CumulativeDaysOnMarket"),
             "remarks": pick(r, "PublicRemarks", default=""),
+            "property_type": pick(r, "PropertyType", "PropertySubType",
+                                  default=""),
         })
     return pd.DataFrame(out)
 
@@ -115,23 +117,49 @@ def mao(arv_p25: float, sqft: float, rehab_psf: float, margin: float,
             "opening_offer": round(val * 0.90)}
 
 
+def classify_listing(status: str, ptype: str) -> str:
+    """What a matched MLS record means for outreach."""
+    lease = "LEASE" in str(ptype).upper() or "RENT" in str(ptype).upper()
+    s = str(status).upper()
+    if s in ("EXPIRED", "WITHDRAWN", "CANCELED", "CANCELLED"):
+        return "RENTAL_FAILED" if lease else "FAILED_SALE"
+    if s == "CLOSED":
+        return "RENTED" if lease else "SOLD_VIA_MLS"
+    if s in ("ACTIVE", "ACTIVEUNDERCONTRACT", "PENDING", "COMINGSOON"):
+        return "LISTED_NOW"  # suppression handles these — do not solicit
+    return "OTHER"
+
+
 def match_expireds(hot: pd.DataFrame, exp: pd.DataFrame) -> pd.DataFrame:
     """Street+zip primary key (immune to MLS municipality-vs-postal-city
-    naming); street+city as fallback."""
+    naming); street+city as fallback. Every overlap is labeled via
+    classify_listing — servers have been observed ignoring $filter on
+    status, so nothing here trusts the query filter."""
     exp_keys: dict = {}
     for _, e in exp.iterrows():
         a = normalize_address(e.get("street") or e.get("address"))
-        if str(e.get("zip") or "").strip():
-            exp_keys[(a, str(e["zip"])[:5])] = e["status"]
-        exp_keys[(a, str(e.get("city") or "").upper().strip())] = e["status"]
+        info = {
+            "mls_status": e.get("status"),
+            "mls_type": classify_listing(e.get("status"),
+                                         e.get("property_type")),
+            "mls_close_date": e.get("close_date"),
+            "mls_list_price": e.get("list_price"),
+        }
+        # FAILED_SALE outranks other overlaps for the same address
+        for k in [(a, str(e.get("zip") or "")[:5]),
+                  (a, str(e.get("city") or "").upper().strip())]:
+            if k not in exp_keys or (info["mls_type"] == "FAILED_SALE"
+                                     and exp_keys[k]["mls_type"]
+                                     != "FAILED_SALE"):
+                exp_keys[k] = info
     hits = []
     for _, r in hot.iterrows():
         a = normalize_address(r["Property Address"])
         k_zip = (a, str(r.get("Property Zip Code") or "")[:5])
         k_city = (a, str(r.get("Property City") or "").upper().strip())
-        st = exp_keys.get(k_zip) or exp_keys.get(k_city)
-        if st:
-            hits.append({**r, "mls_status": st, "was_listed": True})
+        info = exp_keys.get(k_zip) or exp_keys.get(k_city)
+        if info:
+            hits.append({**r, **info, "was_listed": True})
     return pd.DataFrame(hits)
 
 
@@ -212,7 +240,8 @@ def cmd_expireds(client: SparkClient, args) -> None:
            f"and ListingContractDate ge {args.since}")
     rows = client.query(
         flt=flt,
-        select="UnparsedAddress,City,PostalCode,StandardStatus,ListPrice")
+        select="UnparsedAddress,City,PostalCode,StandardStatus,ListPrice,"
+               "PropertyType,CloseDate")
     exp = rows_to_frame(rows)
     src = PROCESSED / "master_status.parquet"
     if not src.exists():
@@ -224,13 +253,23 @@ def cmd_expireds(client: SparkClient, args) -> None:
     hits = match_expireds(hot, exp)
     dest = PROCESSED / "hot_list_expired_overlay.csv"
     hits.to_csv(dest, index=False)
-    print(f"{len(exp)} expired/withdrawn MOMLS listings since {args.since}; "
+    print(f"{len(exp)} MOMLS listings matched-against since {args.since} "
+          f"(server may ignore status filters; classified client-side); "
           f"{len(hits)} overlap the hot list -> {dest}")
     if len(hits):
-        print(hits[["Property Address", "Property City", "mls_status"]]
-              .to_string(index=False))
-        print("These already tried retail and failed = top of the dial "
-              "order. They had an agent — lead with the buy option.")
+        print(hits[["Property Address", "Property City", "mls_type",
+                    "mls_status", "mls_close_date"]].to_string(index=False))
+        print(
+            "\nHow to read mls_type:\n"
+            "  FAILED_SALE  tried retail, didn't sell -> TOP of dial order,"
+            " lead with the buy option\n"
+            "  RENTED       closed rental -> owner is a landlord: tired-"
+            "landlord angle\n"
+            "  SOLD_VIA_MLS closed sale (check date vs SR1A window before"
+            " trusting)\n"
+            "  LISTED_NOW   actively listed -> DO NOT SOLICIT (suppression"
+            " already removes these from mail/routes)"
+        )
 
 
 def main() -> None:
