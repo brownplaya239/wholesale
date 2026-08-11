@@ -352,7 +352,15 @@ def test_pipeline(tmp: Path):
     check(al.loc["4 PINE CT|EDISON", "mail_name"] == "Nguyen, Minh",
           "mail: addressed to CURRENT owner")
 
+    sup = {("4 PINE CT", "EDISON")}
+    segs_sup = s05.build_segments(resolved, vac, suppress=sup)
+    check("4 PINE CT|EDISON" not in set(segs_sup["all"]["ref_id"]),
+          "mail: actively-listed property suppressed (REC rule)")
+
     print("\n[7] knock routes / call-first")
+    knock_s, _ = s06.build_routes(resolved, suppress=sup)
+    check("4 Pine Ct" not in set(knock_s["Property Address"]),
+          "routes: actively-listed property suppressed")
     knock, calls = s06.build_routes(resolved)
     kset, cset = set(knock["Property Address"]), set(calls["Property Address"])
     check("4 Pine Ct" in kset, "routes: heir-at-property -> knock list")

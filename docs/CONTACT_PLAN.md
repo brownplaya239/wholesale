@@ -1,5 +1,10 @@
 # Contact & conversion plan — first cycle
 
+> REVISED 2026-08-11: Sum is a licensed NJ agent. See "Licensed-agent
+> addendum" at the bottom — it changes the scripts, the letter, adds an MLS
+> suppression step, and adds the listing conversion track. Where the
+> addendum conflicts with the base plan below, the addendum wins.
+
 Working the outputs: hot_list.csv (132), doorknock_routes.csv (94 stops),
 call_first.csv (38, 6 out-of-state), mail_touch1_all.csv (654),
 skiptrace_upload.csv (445 owners). Benchmarks to expect: 1–3% overall
@@ -92,6 +97,78 @@ signed contract. The game is speed-to-contact and follow-up, not volume.
 ## Weekly scorecard (10 min, honest)
 
 letters_sent, returns, knocks, door_contacts, dials, phone_contacts,
-appointments, offers_written, contracts. If contacts ≥15 and appointments
-= 0, the problem is script/offer, not the list — revisit before spending
-on touch 2.
+appointments, offers_written, contracts_or_listings. If contacts ≥15 and
+appointments = 0, the problem is script/offer, not the list — revisit
+before spending on touch 2.
+
+## Licensed-agent addendum (controls over the base plan)
+
+**0. Before anything ships — broker + MLS**
+- If licensed as a salesperson: confirm with the broker of record that
+  (a) this solicitation campaign runs under the firm's identity per office
+  policy and NJ advertising rules, and (b) the affiliation agreement
+  permits buying as principal (some offices require running it through the
+  office / broker sign-off). If broker of record: your call, same rules.
+- Export active + under-contract listings for the 5 counties from MLS ->
+  data/processed/suppress_active_listings.csv (address + city columns) ->
+  re-run 05 and 06. NJ REC prohibits soliciting another broker's active
+  listing; this is the automated guardrail. Refresh the export before
+  every mail drop and knock day.
+
+**1. Disclosure — every first contact, no exceptions**
+- Letters: signature block shows name, "NJ Licensed Real Estate
+  Salesperson" (or Broker-Salesperson), brokerage name, phone. No "I'm not
+  an agent" anywhere — that language is retired.
+- Door/phone: license comes up in the first breath, and honestly:
+  "I'm [name], a licensed agent with [brokerage] — but I'm not here
+  fishing for a listing; I also buy houses myself."
+- Any principal purchase: written disclosure IN THE OFFER AND CONTRACT
+  that the buyer is a NJ real estate licensee (buying for own account /
+  via [LLC] of which the licensee is a member). Attorney bakes this in.
+- When buying as principal, add the fairness file: written note advising
+  the seller they may seek their own appraisal/representation + keep the
+  comp file you based the price on. That's the REC-audit defense if a
+  below-market estate purchase is ever questioned.
+
+**2. The letter, revised (dual-track)**
+
+> Dear [Name],
+>
+> My name is [Name] — I'm a licensed real estate agent with [Brokerage],
+> and I'm writing about the property at [Address].
+>
+> I work with owners in whichever way serves them better. If a fast,
+> as-is sale matters most, I buy properties myself, for cash, on your
+> timeline — no repairs, no showings. If top price matters more than
+> speed, I can tell you honestly what it would bring on the open market
+> and handle the sale properly.
+>
+> Either way, the first conversation is free and carries no obligation.
+> Call or text me directly at [phone] — I answer personally.
+>
+> [Name]
+> NJ Licensed Real Estate Salesperson, [Brokerage]
+> [Phone] · [Email]
+
+**3. Dual-track qualification (replaces the buy-only rail)**
+Same 4 questions (condition, occupancy, timeline, price expectation),
+now routed two ways:
+- Deep discount + speed/certainty need + condition issues -> PRINCIPAL
+  BUY: cash offer per the MAO rail, licensee disclosure in writing.
+- Price-focused, no urgency, retail-able condition -> LISTING: CMA
+  appointment, standard listing agreement. A Monmouth listing at 2.5%
+  often out-earns a thin flip — take the listing without ego.
+- Genuinely torn -> present BOTH numbers side by side ("I'll buy it for
+  $X cash this month, or list it at $Y and you likely net $Z after
+  commission and time — here's the tradeoff"). This two-option close is
+  the strongest frame in the stack AND the most defensible, because the
+  seller sees the market number next to your cash number.
+- Never do: quote a cash price while withholding your view of market
+  value. As a licensee, lowballing an estate without the market context
+  in writing is how REC complaints get written.
+
+**4. Economics update**
+Funnel value roughly doubles: expect more listings than buys from this
+list (most heirs want market price). 15–30 conversations -> realistic
+first-cycle outcome is 1 purchase AND 2–4 listings. The scorecard counts
+both as conversions.

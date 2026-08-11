@@ -50,8 +50,14 @@ Owner: Sum. Footprint: Monmouth, Middlesex, Somerset, Union, Hudson counties, NJ
 
 - No AI voice, ringless VM, or bulk SMS on this file — zero consent artifacts exist.
   FCC 24-17 puts AI voice inside TCPA §227(b): $500–$1,500/call, uncapped.
-- Market the equitable interest / offer to buy as principal — never the property
-  itself (NJ unlicensed-brokering line, N.J.S.A. 45:15).
+- Sum IS a licensed NJ real estate agent (updated 2026-08-11) — the
+  unlicensed-brokering concern is moot; the binding rules are NJ REC's:
+  disclose license status at first contact and in writing (and in any
+  contract where Sum buys as principal); solicitation runs under the
+  brokerage identity per office policy; NEVER solicit another broker's
+  active listings (05/06 suppress via
+  data/processed/suppress_active_listings.csv — keep the MLS export fresh);
+  leads may be converted to listings — present buy-vs-list options honestly.
 - NJ purchase contracts are not automatically assignable — express assignment clause
   required; attorney-drafted PSA (avoids the 3-day attorney-review window that
   attaches to realtor-form contracts).

@@ -40,9 +40,14 @@ Don't cheap out on: litigator scrub; First-Class postage (returns = data).
 
 ## Legal rails (NJ)
 
-- No wholesaling-specific NJ statute; enforcement via licensing framework
-  (N.J.S.A. 45:15). Market equitable interest / buy as principal — never the
-  property itself.
+- UPDATE 2026-08-11: Sum is a licensed NJ agent, which retires the
+  unlicensed-brokering concern (N.J.S.A. 45:15) and replaces it with REC
+  obligations: license-status disclosure at first contact, in writing, and
+  in any principal-purchase contract; solicitation under brokerage identity
+  per office policy; no soliciting other brokers' active listings (MLS
+  suppression file feeds 05/06); dual-track buy-or-list presentation is
+  allowed and encouraged — honestly stated, with the comp file retained as
+  the value-basis record when buying as principal.
 - Contracts not automatically assignable: express assignment clause + addendum;
   attorney-drafted PSA avoids the realtor-form 3-day attorney-review window.
 - FCC 24-17: AI voice = "artificial or prerecorded voice" under TCPA §227(b);

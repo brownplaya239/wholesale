@@ -526,6 +526,38 @@ def fetch_arcgis_layer(layer_url: str, where: str, out_fields: str,
     return pd.DataFrame(rows)
 
 
+def load_listing_suppression(path: Path | None = None) -> set:
+    """(normalized_address, UPPER city) pairs to exclude from outreach.
+
+    NJ REC prohibits soliciting properties actively listed with another
+    broker. Drop an MLS export at data/processed/suppress_active_listings.csv
+    (columns containing address + city, any casing) and 05/06 suppress
+    matches. Rows without a city match on address alone.
+    """
+    p = Path(path) if path else PROCESSED / "suppress_active_listings.csv"
+    if not p.exists():
+        return set()
+    df = pd.read_csv(p, dtype=str)
+    lower = {c.lower().strip(): c for c in df.columns}
+    ac = next((lower[k] for k in
+               ("address", "property address", "street address", "street")
+               if k in lower), None)
+    cc = next((lower[k] for k in ("city", "property city", "town", "municipality")
+               if k in lower), None)
+    if ac is None:
+        raise SystemExit(f"{p}: no address-like column found")
+    addr = df[ac].map(normalize_address)
+    city = (df[cc].astype(str).str.upper().str.strip()
+            if cc else pd.Series("", index=df.index))
+    return set(zip(addr, city.fillna("")))
+
+
+def is_suppressed(addr: str, city: str, suppress: set) -> bool:
+    a = normalize_address(addr)
+    return (a, str(city or "").upper().strip()) in suppress or \
+        (a, "") in suppress
+
+
 def load_master() -> pd.DataFrame:
     pq = PROCESSED / "master.parquet"
     pk = PROCESSED / "master.pkl"

@@ -24,7 +24,10 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from nj_common import PROCESSED, house_number, normalize_address, street_key  # noqa: E402
+from nj_common import (  # noqa: E402
+    PROCESSED, house_number, is_suppressed, load_listing_suppression,
+    normalize_address, street_key,
+)
 
 
 def mail_at_property(prop_addr: str, owner_addr: str) -> bool | None:
@@ -40,12 +43,20 @@ def mail_at_property(prop_addr: str, owner_addr: str) -> bool | None:
     return house_number(p) == house_number(o) and street_key(p) == street_key(o)
 
 
-def build_routes(m: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+def build_routes(m: pd.DataFrame,
+                 suppress: set | None = None
+                 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     hot = m[
         ((m["cohort"] == "INHERITANCE") | (m["SourceCount"] >= 2))
         & (m["status"] != "SOLD_ARMS_LENGTH")
         & (m["cohort"] != "ESTATE_SALE_PRICED")
     ].copy()
+    if suppress:
+        listed = [is_suppressed(a, c, suppress) for a, c in
+                  zip(hot["Property Address"], hot["Property City"])]
+        if sum(listed):
+            print(f"  suppressed {sum(listed)} actively-listed properties")
+        hot = hot[[not x for x in listed]]
 
     hot["at_property"] = [
         mail_at_property(pa, oa)
@@ -89,7 +100,8 @@ def main() -> None:
     src = PROCESSED / "master_status.parquet"
     if not src.exists():
         raise SystemExit("Run 02_status_resolution.py first.")
-    knock, calls = build_routes(pd.read_parquet(src))
+    knock, calls = build_routes(pd.read_parquet(src),
+                                load_listing_suppression())
     knock.to_csv(PROCESSED / "doorknock_routes.csv", index=False)
     calls.to_csv(PROCESSED / "call_first.csv", index=False)
     print(f"Door-knock: {len(knock)} stops across "

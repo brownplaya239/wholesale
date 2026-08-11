@@ -33,7 +33,9 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from nj_common import COMPLIANCE, PROCESSED  # noqa: E402
+from nj_common import (  # noqa: E402
+    COMPLIANCE, PROCESSED, is_suppressed, load_listing_suppression,
+)
 
 SURVIVOR_STATUSES = {"SAME_OWNER", "OWNER_CHANGED_NO_SALE",
                      "NO_SALE_OWNER_UNVERIFIED", "UNRESOLVED"}
@@ -57,12 +59,20 @@ def recipient_name(row) -> str:
     return f"{first} {last}".strip().title() or "Property Owner"
 
 
-def build_segments(m: pd.DataFrame,
-                   vacancy: pd.DataFrame | None) -> dict[str, pd.DataFrame]:
+def build_segments(m: pd.DataFrame, vacancy: pd.DataFrame | None,
+                   suppress: set | None = None) -> dict[str, pd.DataFrame]:
     keep = m[
         m["status"].isin(SURVIVOR_STATUSES)
         | ((m["status"] == "SOLD_NON_USABLE") & (m["cohort"] == "INHERITANCE"))
     ].copy()
+    if suppress:
+        listed = [is_suppressed(a, c, suppress) for a, c in
+                  zip(keep["Property Address"], keep["Property City"])]
+        n = sum(listed)
+        if n:
+            print(f"  suppressed {n} actively-listed properties "
+                  "(REC: no soliciting another broker's listings)")
+        keep = keep[[not x for x in listed]]
 
     if vacancy is not None:
         v = vacancy.rename(columns=str.lower)
@@ -127,8 +137,13 @@ def main() -> None:
     if vacancy is None:
         print("No vacancy_flags.csv — S3 will be empty until the DPV batch "
               "runs (Smarty/Melissa on the 546 Vacancy-source records).")
+    suppress = load_listing_suppression()
+    if not suppress:
+        print("No suppress_active_listings.csv — export active/UC listings "
+              "for the 5 counties from MLS and drop it in data/processed/ "
+              "so listed properties are excluded (REC rule).")
 
-    segs = build_segments(m, vacancy)
+    segs = build_segments(m, vacancy, suppress)
     for name, df in segs.items():
         dest = PROCESSED / (
             "mail_touch1_all.csv" if name == "all" else f"mail_{name.lower()}.csv")
