@@ -26,14 +26,24 @@ in a folder and re-run:
 and those records upgrade to SAME_OWNER / OWNER_CHANGED_NO_SALE, which
 sharpens the inheritance cohort (the highest-value segment).
 
-## Where to send
+## Where to send (channels verified 2026-08-11; re-check if bounced)
 
-One request per county tax board (5 total). County tax board contact pages
-list an OPRA custodian or records-request form; some accept email. Monmouth
-and Middlesex also run their own open-records portals which may be faster.
-Alternative single-stop: NJ Division of Taxation, Property Administration
-(records custodian via the state OPRA central portal) for the MOD-IV master
-file of the five counties.
+- Somerset: EMAIL OPRA@co.somerset.nj.us (Custodian of Records,
+  908-231-7030; Tax Board at 20 Grove St 2nd Fl, Somerville)
+- Union: EMAIL opra@ucnj.org (Clerk of the Board, 10 Elizabethtown Plaza
+  6th Fl, Elizabeth 07207; their Part B form optional attachment).
+  NOTE: ucc.edu OPRA pages are Union County COLLEGE — wrong entity.
+- Monmouth: ONLINE PORTAL via visitmonmouth.com "Government OPRA" page
+  (custodian: Board of Taxation, Hall of Records, 1 E Main St, Freehold;
+  732-431-7404)
+- Middlesex: ONLINE FORM middlesexcountynj.gov -> "File an OPRA Request"
+  (custodian: Board of Taxation)
+- Hudson: County Clerk OPRA portal hudsoncountyclerk.org/opra-request-portal
+  (name Board of Taxation as department; 201-369-3470)
+- Fallback for any county: opramachine.com (delivers to the registered
+  custodian, public paper trail). If told "use our website instead":
+  cite Burnett v. County of Bergen — electronic records in the medium
+  maintained are disclosable — and accept their standard CSV export.
 
 ## Request text (adapt per county)
 
