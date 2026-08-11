@@ -1,0 +1,9 @@
+# PII — never commit lead data
+data/raw/
+data/processed/
+data/cache/
+compliance/*.csv
+compliance/*.xlsx
+*.pkl
+__pycache__/
+.venv/
