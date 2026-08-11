@@ -77,7 +77,25 @@ def main() -> None:
     pq = CACHE / "sr1a.parquet"
     if not pq.exists():
         raise SystemExit("Run 02_status_resolution.py fetch first.")
-    buyers = harvest(pd.read_parquet(pq))
+    sr1a = pd.read_parquet(pq)
+    has_identity = (
+        sr1a["grantee_name"].fillna("").str.strip().ne("")
+        | sr1a["grantee_street"].fillna("").str.strip().ne("")
+    )
+    if not has_identity.any():
+        raise SystemExit(
+            "The statewide SR1A OPRA extract blanks the entire grantee block "
+            "(names AND mailing addresses) — only deed book/page survive, so "
+            "buyers cannot be identified or clustered from this file.\n"
+            "Fix: OPRA the unredacted SR1A from each county tax board "
+            "(docs/OPRA_REQUEST.md — the same request covers MOD-IV), drop "
+            "the files in a folder, then:\n"
+            "  python scripts/02_status_resolution.py fetch --sr1a-dir DIR\n"
+            "  python scripts/03_buyer_harvest.py\n"
+            "Deed book/page per sale remain available in "
+            "data/cache/sr1a.parquet for one-off clerk-portal pulls."
+        )
+    buyers = harvest(sr1a)
     dest = PROCESSED / "buyers.csv"
     buyers.to_csv(dest, index=False)
     v = buyers["verified_active"].sum()

@@ -12,10 +12,18 @@
   - [x] MOD-IV owner-name compare, status + cohort columns
   - [x] report: sold-since %, inheritance cohort, tier_a_unresolved.csv queue
 - [x] `scripts/01_consolidate_and_score.py` regenerates master.parquet
-- [ ] FIRST LIVE RUN: `python scripts/02_status_resolution.py all` from a
-      machine with nj.gov access (the dev sandbox blocked egress — download
-      links + real-file layout are validated in code but not yet live-tested;
-      fall back to --sr1a-dir/--modiv-dir if Treasury moved the links)
+- [x] FIRST LIVE RUN done 2026-08-11: 391,734 sales + 929,397 parcels parsed.
+      Results: sold-since 27.8% (2,224), inheritance cohort 320, match rate
+      85.8%, Tier A manual queue 196.
+      DISCOVERY: statewide MOD-IV blanks ALL owner names and SR1A blanks the
+      whole grantor/grantee block (Daniel's Law-era redaction; NJGIN redacts
+      too). Owner comparison + buyer harvest are gated on OPRA files.
+- [ ] SEND OPRA REQUESTS (5 county tax boards, MOD-IV + SR1A) — template in
+      docs/OPRA_REQUEST.md. On arrival:
+      `02 all --modiv-dir DIR --sr1a-dir DIR` then rerun 03/04/05
+- [ ] Work tier_a_unresolved.csv (196 rows) via county portals
+- [ ] Consider match-rate tuning pass (85.8% now; 908 unmatched / 226
+      ambiguous — mostly city-name and truncation issues)
 
 ## Next
 - [x] Implement 03_buyer_harvest -> buyers.csv (rank grantees, collapse shells)

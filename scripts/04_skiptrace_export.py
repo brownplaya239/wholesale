@@ -54,11 +54,18 @@ def split_owner_name(name: str) -> tuple[str, str]:
     return toks[1], toks[0]  # MOD-IV leads with the surname
 
 
-def build_upload(m: pd.DataFrame) -> pd.DataFrame:
+def build_upload(m: pd.DataFrame, all_tiers: bool = False) -> pd.DataFrame:
     survivors = m[
         m["status"].isin(SURVIVOR_STATUSES)
         | ((m["status"] == "SOLD_NON_USABLE") & (m["cohort"] == "INHERITANCE"))
     ].copy()
+    if not all_tiers:
+        # budget scope per PLAYBOOK: Tier A survivors + the full inheritance
+        # cohort (any tier). --all-tiers exports every survivor (~5k).
+        survivors = survivors[
+            (survivors["Tier"].astype(str) == "A")
+            | (survivors["cohort"] == "INHERITANCE")
+        ]
 
     cur = survivors["current_owner"].fillna("")
     use_current = cur.str.strip().ne("") & ~cur.str.contains("REDACT")
@@ -112,10 +119,16 @@ def build_upload(m: pd.DataFrame) -> pd.DataFrame:
 
 
 def main() -> None:
+    import argparse
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--all-tiers", action="store_true",
+                    help="export every survivor, not just Tier A + inheritance")
+    args = ap.parse_args()
     src = PROCESSED / "master_status.parquet"
     if not src.exists():
         raise SystemExit("Run 02_status_resolution.py first.")
-    out = build_upload(pd.read_parquet(src))
+    out = build_upload(pd.read_parquet(src), all_tiers=args.all_tiers)
     dest = PROCESSED / "skiptrace_upload.csv"
     out.to_csv(dest, index=False)
     uniq = out["trace_group"].nunique()

@@ -295,8 +295,13 @@ def test_pipeline(tmp: Path):
     refs = set(upload["ref_id"])
     check("15 OAK ST|HAZLET" not in refs, "skiptrace: sold suppressed")
     check("1 GHOST WAY|NOWHERE" not in refs, "skiptrace: unresolved excluded")
-    check({"9 ELM AVE|HAZLET", "4 PINE CT|EDISON",
-           "8 BIRCH RD|UNION"} <= refs, "skiptrace: survivors present")
+    check({"9 ELM AVE|HAZLET", "4 PINE CT|EDISON"} <= refs,
+          "skiptrace: survivors present")
+    check("8 BIRCH RD|UNION" not in refs,
+          "skiptrace: Tier B non-inheritance excluded by default scope")
+    full = s04.build_upload(resolved, all_tiers=True)
+    check("8 BIRCH RD|UNION" in set(full["ref_id"]),
+          "skiptrace: --all-tiers widens to every survivor")
     unv = upload[upload["ref_id"] == "7 CEDAR LN|HAZLET"]
     check(len(unv) == 1 and unv.iloc[0]["last_name"] == "Haddad",
           "skiptrace: owner-unverified traced under list name")
