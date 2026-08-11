@@ -275,10 +275,8 @@ def to_num(s: pd.Series) -> pd.Series:
 
 def norm_block_lot(prefix: pd.Series, suffix: pd.Series) -> pd.Series:
     p = prefix.astype("string").str.strip().str.lstrip("0")
-    x = suffix.astype("string").str.strip().str.strip("0 ")
-    return (p + np.where(x.fillna("") != "", "." + x.fillna(""), "")).astype(
-        "string"
-    )
+    x = suffix.astype("string").str.strip().str.strip("0 ").fillna("")
+    return (p + ("." + x).where(x != "", "")).astype("string")
 
 
 def make_pin(muncode, block, lot, qual=None) -> pd.Series:
@@ -286,7 +284,7 @@ def make_pin(muncode, block, lot, qual=None) -> pd.Series:
         lot.astype("string")
     if qual is not None:
         q = qual.astype("string").str.strip().str.upper().str[:5].fillna("")
-        pin = pin + np.where(q != "", "_" + q, "")
+        pin = pin + ("_" + q).where(q != "", "")
     return pin.astype("string")
 
 
@@ -306,14 +304,11 @@ def parse_sr1a_file(path: Path,
             df = df[df["county_code"].astype("string").str.zfill(2)
                     .isin(county_prefixes)]
     else:
+        # zero rows after a county prefilter is legitimate (out-of-footprint
+        # file) — callers enforce non-emptiness on the aggregate instead
         df = parse_fixed(path, SR1A_LAYOUT, SR1A_RECLEN, county_prefixes)
-        if len(df) == 0:
-            raise RuntimeError(
-                f"{path.name}: no rows for target counties — file empty or "
-                "layout drift vs SR1Afilelayout.pdf."
-            )
         ok = df["county_code"].str.fullmatch(r"0[1-9]|1\d|2[01]").fillna(False)
-        if ok.mean() < 0.95:
+        if len(df) and ok.mean() < 0.95:
             raise RuntimeError(
                 f"{path.name}: only {ok.mean():.0%} of rows have a valid "
                 "county code — layout drift vs SR1Afilelayout.pdf. Update "
@@ -367,14 +362,11 @@ def parse_modiv_file(path: Path,
         df["block"] = df["block_raw"].astype("string").str.strip()
         df["lot"] = df["lot_raw"].astype("string").str.strip()
     else:
+        # zero rows after a county prefilter is legitimate (out-of-footprint
+        # file) — callers enforce non-emptiness on the aggregate instead
         df = parse_fixed(path, MODIV_LAYOUT, MODIV_RECLEN, county_prefixes)
-        if len(df) == 0:
-            raise RuntimeError(
-                f"{path.name}: no rows for target counties — file empty or "
-                "layout drift vs the MOD-IV spec."
-            )
         ok = df["muncode"].str.fullmatch(r"\d{4}").fillna(False)
-        if ok.mean() < 0.95:
+        if len(df) and ok.mean() < 0.95:
             raise RuntimeError(
                 f"{path.name}: only {ok.mean():.0%} of rows have a 4-digit "
                 "muncode — layout drift vs the MOD-IV spec. Update "

@@ -106,6 +106,14 @@ def test_parsers(tmp: Path):
     check(len(filt) == 2 and (filt["muncode"].str[:2]
           .isin(nc.TARGET_COUNTY_CODES)).all(),
           "SR1A: county prefilter drops out-of-footprint rows")
+    other = tmp / "sr1a_atlantic.txt"
+    other.write_text(sr1a_line(county="01", district="01"))
+    check(len(nc.parse_sr1a_file(other, nc.TARGET_COUNTY_CODES)) == 0,
+          "SR1A: fully out-of-footprint file returns empty, no raise")
+    mv_other = tmp / "modiv_atlantic.txt"
+    mv_other.write_text(modiv_line(muncode="0101"))
+    check(len(nc.parse_modiv_file(mv_other, nc.TARGET_COUNTY_CODES)) == 0,
+          "MOD-IV: fully out-of-footprint file returns empty, no raise")
     r = df.iloc[0]
     check(r["muncode"] == "1305", "SR1A: muncode assembled")
     check(r["block"] == "123" and r["lot"] == "4", "SR1A: block/lot stripped")

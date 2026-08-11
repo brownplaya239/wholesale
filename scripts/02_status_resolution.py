@@ -107,12 +107,19 @@ def fetch_sr1a(years: range, manual_dir: Path | None) -> pd.DataFrame:
         frames.append(df)
         print(f"  SR1A {f.name}: {len(df):,} rows in target counties")
     sr1a = pd.concat(frames, ignore_index=True)
+    if len(sr1a) == 0:
+        raise SystemExit(
+            "SR1A: zero sales parsed for the target counties — layout drift "
+            "or wrong files. Use --sr1a-dir with hand-downloaded files."
+        )
     sr1a = sr1a.drop_duplicates(
         subset=["pin", "sale_date", "sale_price", "grantee_name"]
     )
     got_years = sorted(sr1a["sale_date"].dt.year.dropna().unique().astype(int))
     span = f"{got_years[0]}-{got_years[-1]}" if got_years else "none"
-    print(f"SR1A cache: {len(sr1a):,} sales, deed years {span} -> {out_pq}")
+    in_window = (sr1a["sale_date"] >= "2020-01-01").sum()
+    print(f"SR1A cache: {len(sr1a):,} sales, deed years {span} "
+          f"({in_window:,} dated 2020+) -> {out_pq}")
     missing = [y for y in years if y not in got_years]
     if missing:
         print(f"  WARNING: no sales with deed year(s) {missing} — if those "
@@ -172,11 +179,28 @@ def fetch_modiv(year: int, manual_dir: Path | None) -> pd.DataFrame:
                 files.extend(extract_data_files(got,
                                                 MODIV_CACHE / "extracted"))
 
+    def _file_county(p: Path) -> str | None:
+        """'Atlantic 26 RE.txt' -> 'ATLANTIC' (statewide zip = 21 such files)."""
+        stem = re.sub(r"[^A-Za-z]", "", p.stem).upper()
+        return next((c for c in COUNTY_CODES if stem.startswith(c)), None)
+
     frames = []
     for f in sorted(set(files)):
+        fc = _file_county(f)
+        if fc is not None and fc not in TARGET_COUNTIES:
+            continue  # other county's file — skip without streaming it
         df = parse_modiv_file(f, TARGET_COUNTY_CODES)
+        if len(df) == 0:
+            print(f"  MOD-IV {f.name}: 0 target-county parcels, skipped")
+            continue
         frames.append(df)
         print(f"  MOD-IV {f.name}: {len(df):,} parcels")
+    if not frames:
+        raise SystemExit(
+            "MOD-IV: no parcels found for the 5 target counties in any file "
+            "— layout drift or wrong files. Check the extracted files in "
+            f"{MODIV_CACHE / 'extracted'} or use --modiv-dir."
+        )
     modiv = pd.concat(frames, ignore_index=True)
     modiv = modiv.drop_duplicates(subset=["pin", "qual"])
     modiv.to_parquet(out_pq, index=False)
