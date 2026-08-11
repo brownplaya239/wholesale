@@ -37,6 +37,7 @@ s02 = _load("s02", ROOT / "scripts/02_status_resolution.py")
 s03 = _load("s03", ROOT / "scripts/03_buyer_harvest.py")
 s04 = _load("s04", ROOT / "scripts/04_skiptrace_export.py")
 s05 = _load("s05", ROOT / "scripts/05_mail_segments.py")
+s06 = _load("s06", ROOT / "scripts/06_routes.py")
 
 PASS = 0
 
@@ -222,7 +223,7 @@ def test_pipeline(tmp: Path):
                    owner="SMITH, ALICE"),                         # B
         modiv_line(muncode="1205", block="30", lot="2",
                    loc="4 PINE COURT", owner="NGUYEN, MINH",
-                   ozip="088170000"),                             # C new owner
+                   oaddr="4 PINE CT", ozip="088170000"),          # C new owner
         modiv_line(muncode="2015", block="44", lot="1",
                    loc="8 BIRCH ROAD", owner="LOPEZ, MARIA",
                    ozip="070830000"),                             # D same owner
@@ -350,6 +351,18 @@ def test_pipeline(tmp: Path):
           "mail: RSR endorsement on every piece")
     check(al.loc["4 PINE CT|EDISON", "mail_name"] == "Nguyen, Minh",
           "mail: addressed to CURRENT owner")
+
+    print("\n[7] knock routes / call-first")
+    knock, calls = s06.build_routes(resolved)
+    kset, cset = set(knock["Property Address"]), set(calls["Property Address"])
+    check("4 Pine Ct" in kset, "routes: heir-at-property -> knock list")
+    check("9 Elm Avenue" in cset,
+          "routes: absentee heir -> call-first, not knock")
+    check("15 Oak St" not in kset | cset, "routes: sold excluded")
+    check("6 Spruce St" not in kset | cset,
+          "routes: priced estate sale excluded")
+    check(list(knock["stop"]) == list(range(1, len(knock) + 1)),
+          "routes: sequential stop numbers")
 
 
 def test_scale():
