@@ -39,6 +39,7 @@ s04 = _load("s04", ROOT / "scripts/04_skiptrace_export.py")
 s05 = _load("s05", ROOT / "scripts/05_mail_segments.py")
 s06 = _load("s06", ROOT / "scripts/06_routes.py")
 s07 = _load("s07", ROOT / "scripts/07_comps.py")
+s08 = _load("s08", ROOT / "scripts/08_targets.py")
 spark = _load("spark", ROOT / "scripts/spark_client.py")
 
 PASS = 0
@@ -373,6 +374,32 @@ def test_pipeline(tmp: Path):
           "routes: priced estate sale excluded")
     check(list(knock["stop"]) == list(range(1, len(knock) + 1)),
           "routes: sequential stop numbers")
+
+    print("\n[7b] target board")
+    ov = pd.DataFrame([{"pkey": "9 ELM AVE|HAZLET", "mls_type": "RENTED",
+                        "mls_close_date": ""}])
+    board = s08.build_targets(resolved, ov)
+    b = board.set_index("pkey")
+    check(b.loc["9 ELM AVE|HAZLET", "method"] == "CALL_FIRST"
+          and "heir-landlord" in b.loc["9 ELM AVE|HAZLET", "why"],
+          "targets: RENTED overlay boosts + call-first for absentee")
+    check(b.loc["4 PINE CT|EDISON", "method"] == "KNOCK",
+          "targets: mail-at-property -> knock")
+    base = s08.build_targets(resolved, None).set_index("pkey")
+    check(b.loc["9 ELM AVE|HAZLET", "score"]
+          > base.loc["9 ELM AVE|HAZLET", "score"],
+          "targets: overlay adjustment raises score")
+    ov2 = pd.DataFrame([{"pkey": "9 ELM AVE|HAZLET",
+                         "mls_type": "SOLD_VIA_MLS",
+                         "mls_close_date": "2023-07-10"}])
+    b2 = s08.build_targets(resolved, ov2).set_index("pkey")
+    check(b2.loc["9 ELM AVE|HAZLET", "method"] == "DROP",
+          "targets: same-day MLS sale + $1 deed -> DROP")
+    b3 = s08.build_targets(resolved, None,
+                           suppress={("4 PINE CT", "EDISON")}).set_index(
+        "pkey")
+    check(b3.loc["4 PINE CT|EDISON", "method"] == "WATCH",
+          "targets: actively-listed -> WATCH, never solicit")
 
 
 def test_spark():
