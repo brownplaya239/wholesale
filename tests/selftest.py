@@ -186,6 +186,9 @@ def make_master() -> pd.DataFrame:
         # G: matched, no sale, owner name blank (statewide redaction)
         dict(pkey="7 CEDAR LN|HAZLET", addr="7 Cedar Ln", city="Hazlet",
              zipc="07730", first="Omar", last="Haddad", county="Monmouth"),
+        # H: estate NU sale at full price = executor sold to a real buyer
+        dict(pkey="6 SPRUCE ST|HAZLET", addr="6 Spruce St", city="Hazlet",
+             zipc="07730", first="Ada", last="Weiss", county="Monmouth"),
     ]
     m = pd.DataFrame({
         "pkey": [r["pkey"] for r in rows],
@@ -201,10 +204,11 @@ def make_master() -> pd.DataFrame:
         "Owner Zip Code": [r["zipc"] for r in rows],
         "County": [r["county"] for r in rows],
         "Sources": ["Vacancy", "Inherited", "Inherited", "High Equity",
-                    "Vacancy", "Vacancy + Inherited", "High Equity"],
-        "SourceCount": [1, 1, 1, 1, 1, 2, 1],
-        "Tier": ["A", "A", "A", "B", "A", "A", "A"],
-        "PriorityScore": [60.0, 70.0, 65.0, 40.0, 60.0, 80.0, 55.0],
+                    "Vacancy", "Vacancy + Inherited", "High Equity",
+                    "Inherited"],
+        "SourceCount": [1, 1, 1, 1, 1, 2, 1, 1],
+        "Tier": ["A", "A", "A", "B", "A", "A", "A", "A"],
+        "PriorityScore": [60.0, 70.0, 65.0, 40.0, 60.0, 80.0, 55.0, 62.0],
     })
     return m
 
@@ -231,6 +235,9 @@ def test_pipeline(tmp: Path):
         modiv_line(muncode="1305", block="500", lot="3",
                    loc="7 CEDAR LANE", owner="",
                    ozip="077300000"),                             # G no name
+        modiv_line(muncode="1305", block="600", lot="2",
+                   loc="6 SPRUCE STREET", owner="BUYER, NEW",
+                   ozip="077300000"),                             # H new owner
     ]))
     modiv = nc.parse_modiv_file(mv)
 
@@ -239,6 +246,8 @@ def test_pipeline(tmp: Path):
         sr1a_line(),                                              # A usable
         sr1a_line(block="200", lot="7", nu="010", deed="230710",
                   grantee="SMITH, ALICE", price=1),               # B estate
+        sr1a_line(block="600", lot="2", nu="010", deed="240501",
+                  grantee="BUYER, NEW", price=450000),            # H exec sale
     ]))
     sr1a = nc.parse_sr1a_file(sr)
     master = make_master()
@@ -257,7 +266,10 @@ def test_pipeline(tmp: Path):
     co = dict(zip(resolved["pkey"], resolved["cohort"]))
     check(st["15 OAK ST|HAZLET"] == "SOLD_ARMS_LENGTH", "status: sold arm's")
     check(st["9 ELM AVE|HAZLET"] == "SOLD_NON_USABLE", "status: NU sale")
-    check(co["9 ELM AVE|HAZLET"] == "INHERITANCE", "cohort: estate NU-10")
+    check(co["9 ELM AVE|HAZLET"] == "INHERITANCE",
+          "cohort: $1 estate NU-10 -> heir holds, hot lead")
+    check(co["15 OAK ST|HAZLET"] != "INHERITANCE",
+          "cohort: arm's-length sale never in inheritance")
     check(st["4 PINE CT|EDISON"] == "OWNER_CHANGED_NO_SALE",
           "status: owner changed no sale")
     check(co["4 PINE CT|EDISON"] == "INHERITANCE", "cohort: person xfer")
@@ -265,6 +277,8 @@ def test_pipeline(tmp: Path):
     check(st["1 GHOST WAY|NOWHERE"] == "UNRESOLVED", "status: unresolved")
     check(st["7 CEDAR LN|HAZLET"] == "NO_SALE_OWNER_UNVERIFIED",
           "status: matched + no sale + blank owner -> survivor, not dead end")
+    check(co["6 SPRUCE ST|HAZLET"] == "ESTATE_SALE_PRICED",
+          "cohort: full-price estate NU = already sold, suppressed")
     check(resolved.loc[resolved["pkey"] == "15 OAK ST|HAZLET",
                        "sale_price"].iloc[0] == 500000, "sale price carried")
 
@@ -299,6 +313,8 @@ def test_pipeline(tmp: Path):
           "skiptrace: survivors present")
     check("8 BIRCH RD|UNION" not in refs,
           "skiptrace: Tier B non-inheritance excluded by default scope")
+    check("6 SPRUCE ST|HAZLET" not in refs,
+          "skiptrace: priced estate sale not traced")
     full = s04.build_upload(resolved, all_tiers=True)
     check("8 BIRCH RD|UNION" in set(full["ref_id"]),
           "skiptrace: --all-tiers widens to every survivor")

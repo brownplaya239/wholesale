@@ -399,12 +399,18 @@ def resolve_status(master_m: pd.DataFrame, sr1a: pd.DataFrame,
     m.loc[redacted, "status_reason"] = "owner_names_redacted_statewide"
 
     m["cohort"] = ""
+    # $1/nominal consideration = deed moved WITHIN the family/estate: an heir
+    # now holds the property (hot seller lead). A full-price estate-NU sale
+    # is an executor sale to a real buyer — already sold, suppress.
+    nominal = m["sale_price"].fillna(0) <= 1000
     inherit = (
-        ((m["status"] == "SOLD_NON_USABLE") & estate_family)
+        ((m["status"] == "SOLD_NON_USABLE") & estate_family & nominal)
         | ((m["status"] == "OWNER_CHANGED_NO_SALE")
            & ~m["mv_owner_name"].fillna("").map(is_entity))
     )
     m.loc[inherit, "cohort"] = "INHERITANCE"
+    m.loc[(m["status"] == "SOLD_NON_USABLE") & estate_family & ~nominal,
+          "cohort"] = "ESTATE_SALE_PRICED"
     m.loc[(m["status"] == "SOLD_NON_USABLE") & foreclosure,
           "cohort"] = "FORECLOSURE"
     m.loc[(m["status"] == "OWNER_CHANGED_NO_SALE")
