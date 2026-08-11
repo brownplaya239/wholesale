@@ -30,7 +30,11 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from nj_common import PROCESSED, is_entity  # noqa: E402
 
-SURVIVOR_STATUSES = {"SAME_OWNER", "OWNER_CHANGED_NO_SALE"}
+# NO_SALE_OWNER_UNVERIFIED: parcel matched, no sale since 2020, statewide
+# files blank all owner names — the 2019 list name is the best available and
+# is what gets traced (vendors match primarily on address).
+SURVIVOR_STATUSES = {"SAME_OWNER", "OWNER_CHANGED_NO_SALE",
+                     "NO_SALE_OWNER_UNVERIFIED"}
 
 
 def split_owner_name(name: str) -> tuple[str, str]:

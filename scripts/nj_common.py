@@ -263,7 +263,7 @@ def yymmdd_to_date(s: pd.Series) -> pd.Series:
     iso = pd.Series(century, index=s.index, dtype="string") + s.str[:2] + \
         "-" + s.str[2:4] + "-" + s.str[4:6]
     iso = iso.where(s.notna() & (s != "000000"))
-    return pd.to_datetime(iso, errors="coerce")
+    return pd.to_datetime(iso, format="%Y-%m-%d", errors="coerce")
 
 
 def to_num(s: pd.Series) -> pd.Series:

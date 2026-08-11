@@ -183,6 +183,9 @@ def make_master() -> pd.DataFrame:
         # F: ambiguous in county, disambiguated by owner zip
         dict(pkey="5 MAIN ST|FREEHOLD", addr="5 Main St", city="Freehold",
              zipc="07728", first="Ann", last="Kim", county="Monmouth"),
+        # G: matched, no sale, owner name blank (statewide redaction)
+        dict(pkey="7 CEDAR LN|HAZLET", addr="7 Cedar Ln", city="Hazlet",
+             zipc="07730", first="Omar", last="Haddad", county="Monmouth"),
     ]
     m = pd.DataFrame({
         "pkey": [r["pkey"] for r in rows],
@@ -198,10 +201,10 @@ def make_master() -> pd.DataFrame:
         "Owner Zip Code": [r["zipc"] for r in rows],
         "County": [r["county"] for r in rows],
         "Sources": ["Vacancy", "Inherited", "Inherited", "High Equity",
-                    "Vacancy", "Vacancy + Inherited"],
-        "SourceCount": [1, 1, 1, 1, 1, 2],
-        "Tier": ["A", "A", "A", "B", "A", "A"],
-        "PriorityScore": [60.0, 70.0, 65.0, 40.0, 60.0, 80.0],
+                    "Vacancy", "Vacancy + Inherited", "High Equity"],
+        "SourceCount": [1, 1, 1, 1, 1, 2, 1],
+        "Tier": ["A", "A", "A", "B", "A", "A", "A"],
+        "PriorityScore": [60.0, 70.0, 65.0, 40.0, 60.0, 80.0, 55.0],
     })
     return m
 
@@ -225,6 +228,9 @@ def test_pipeline(tmp: Path):
         modiv_line(muncode="1311", block="8", lot="8",
                    loc="5 MAIN ST", owner="KIM, ANN",
                    ozip="077280000"),                             # F real
+        modiv_line(muncode="1305", block="500", lot="3",
+                   loc="7 CEDAR LANE", owner="",
+                   ozip="077300000"),                             # G no name
     ]))
     modiv = nc.parse_modiv_file(mv)
 
@@ -257,6 +263,8 @@ def test_pipeline(tmp: Path):
     check(co["4 PINE CT|EDISON"] == "INHERITANCE", "cohort: person xfer")
     check(st["8 BIRCH RD|UNION"] == "SAME_OWNER", "status: same owner")
     check(st["1 GHOST WAY|NOWHERE"] == "UNRESOLVED", "status: unresolved")
+    check(st["7 CEDAR LN|HAZLET"] == "NO_SALE_OWNER_UNVERIFIED",
+          "status: matched + no sale + blank owner -> survivor, not dead end")
     check(resolved.loc[resolved["pkey"] == "15 OAK ST|HAZLET",
                        "sale_price"].iloc[0] == 500000, "sale price carried")
 
@@ -289,6 +297,9 @@ def test_pipeline(tmp: Path):
     check("1 GHOST WAY|NOWHERE" not in refs, "skiptrace: unresolved excluded")
     check({"9 ELM AVE|HAZLET", "4 PINE CT|EDISON",
            "8 BIRCH RD|UNION"} <= refs, "skiptrace: survivors present")
+    unv = upload[upload["ref_id"] == "7 CEDAR LN|HAZLET"]
+    check(len(unv) == 1 and unv.iloc[0]["last_name"] == "Haddad",
+          "skiptrace: owner-unverified traced under list name")
     row = upload[upload["ref_id"] == "4 PINE CT|EDISON"].iloc[0]
     check(row["last_name"] == "NGUYEN",
           "skiptrace: CURRENT owner traced, not 2019 name")
@@ -312,6 +323,8 @@ def test_pipeline(tmp: Path):
     check(al.loc["1 GHOST WAY|NOWHERE", "segment"] == "S4",
           "mail: unresolved Tier A still mailed -> S4")
     check("15 OAK ST|HAZLET" not in al.index, "mail: sold suppressed")
+    check(al.loc["7 CEDAR LN|HAZLET", "segment"] == "S4",
+          "mail: owner-unverified Tier A mailed -> S4")
     check((al["endorsement"] == "Return Service Requested").all(),
           "mail: RSR endorsement on every piece")
     check(al.loc["4 PINE CT|EDISON", "mail_name"] == "Nguyen, Minh",

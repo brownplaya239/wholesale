@@ -35,7 +35,7 @@ the five county MOD-IV zips by hand from statdata.shtml, unzip, and point
 
 Output columns appended to master (data/processed/master_status.parquet):
   status            in {SOLD_ARMS_LENGTH, SOLD_NON_USABLE, OWNER_CHANGED_NO_SALE,
-                        SAME_OWNER, UNRESOLVED}
+                        SAME_OWNER, NO_SALE_OWNER_UNVERIFIED, UNRESOLVED}
   status_reason, cohort, sale_date, sale_price, nu_code, current_owner,
   current_owner_mailing, muncode, block_lot, match_method
 Decision map:
@@ -44,6 +44,13 @@ Decision map:
                           -> inheritance cohort: TOP outreach priority,
                              skip-trace the *new* owner name
   SAME_OWNER              -> keep, standard priority
+  NO_SALE_OWNER_UNVERIFIED-> parcel matched, no sale since 2020, but the
+                             statewide files blank ALL owner names (Daniel's
+                             Law, and NJGIN redacts too): survivor at standard
+                             priority using the list name; upgraded to
+                             SAME_OWNER / OWNER_CHANGED_NO_SALE once OPRA'd
+                             county tax lists are supplied via --modiv-dir
+                             (docs/OPRA_REQUEST.md has the request template)
   UNRESOLVED (Tier A only)-> manual lookup via county portals
                              (data/processed/tier_a_unresolved.csv)
 """
@@ -382,9 +389,14 @@ def resolve_status(master_m: pd.DataFrame, sr1a: pd.DataFrame,
     m.loc[unmatched, "status"] = "UNRESOLVED"
     m["status_reason"] = ""
     m.loc[unmatched, "status_reason"] = m.loc[unmatched, "match_method"]
+    # Post-Daniel's-Law both statewide MOD-IV and NJGIN blank ALL owner names,
+    # so a matched parcel with no sale since 2020 and no name to compare is a
+    # SURVIVOR (list name = best available), not an unresolved dead end.
+    # OPRA'd county tax lists (--modiv-dir) upgrade these to SAME_OWNER /
+    # OWNER_CHANGED_NO_SALE on a re-run — see docs/OPRA_REQUEST.md.
     redacted = (~unmatched) & (~sold) & owner_cmp.isna()
-    m.loc[redacted, "status"] = "UNRESOLVED"
-    m.loc[redacted, "status_reason"] = "owner_redacted_or_blank"
+    m.loc[redacted, "status"] = "NO_SALE_OWNER_UNVERIFIED"
+    m.loc[redacted, "status_reason"] = "owner_names_redacted_statewide"
 
     m["cohort"] = ""
     inherit = (
