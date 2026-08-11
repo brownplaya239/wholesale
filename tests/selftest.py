@@ -38,6 +38,8 @@ s03 = _load("s03", ROOT / "scripts/03_buyer_harvest.py")
 s04 = _load("s04", ROOT / "scripts/04_skiptrace_export.py")
 s05 = _load("s05", ROOT / "scripts/05_mail_segments.py")
 s06 = _load("s06", ROOT / "scripts/06_routes.py")
+s07 = _load("s07", ROOT / "scripts/07_comps.py")
+spark = _load("spark", ROOT / "scripts/spark_client.py")
 
 PASS = 0
 
@@ -373,6 +375,62 @@ def test_pipeline(tmp: Path):
           "routes: sequential stop numbers")
 
 
+def test_spark():
+    print("\n[8] Spark/MOMLS client + comp math (offline fixtures)")
+    page2 = {"value": [{"UnparsedAddress": "2 B St", "City": "Hazlet",
+                        "StandardStatus": "Closed"}]}
+    page1 = {"value": [{"UnparsedAddress": "1 A St", "City": "Hazlet",
+                        "StandardStatus": "Closed"}],
+             "@odata.nextLink": "NEXT"}
+    calls = []
+
+    def fake_get(url):
+        calls.append(url)
+        return page2 if url == "NEXT" else page1
+
+    c = spark.SparkClient(get_json=fake_get)
+    rows = c.query(flt="StandardStatus eq 'Closed'")
+    check(len(rows) == 2 and calls[1] == "NEXT",
+          "spark: @odata.nextLink pagination followed")
+    check("%24filter=StandardStatus" in calls[0]
+          or "$filter=StandardStatus" in calls[0],
+          "spark: OData filter passed through")
+
+    def comp(price, sqft, remarks=""):
+        return {"UnparsedAddress": "x", "City": "Hazlet",
+                "StandardStatus": "Closed", "ClosePrice": price,
+                "LivingArea": sqft, "PublicRemarks": remarks,
+                "DaysOnMarket": 20}
+
+    comps = s07.rows_to_frame([
+        comp(300000, 1000, "fully renovated"),
+        comp(320000, 1000, "updated kitchen"),
+        comp(340000, 1000, "gut rehab done"),
+        comp(360000, 1000, "brand new everything"),
+        comp(150000, 1000, "needs TLC"),
+        comp(10000, 1000),  # junk row, filtered by price floor
+    ])
+    st = s07.comp_stats(comps, subject_sqft=1000)
+    check(st["n"] == 5 and st["basis"] == "renovated",
+          "comps: junk filtered, renovated basis with >=3 renovated")
+    check(st["arv_p25"] == 315000 and st["arv_median"] == 330000,
+          "comps: ARV p25/median math")
+    m = s07.mao(315000, 1000, rehab_psf=60, margin=0.18,
+                holding_pct=0.05, closing_pct=0.05, fee=0)
+    check(m["mao"] == 166800 and m["opening_offer"] == 150120,
+          "comps: MAO formula per playbook")
+
+    hot = pd.DataFrame({"Property Address": ["99 Church St", "1 Nope Rd"],
+                        "Property City": ["Belford", "Nowhere"]})
+    exp = s07.rows_to_frame([{"UnparsedAddress": "99 CHURCH STREET",
+                              "City": "BELFORD",
+                              "StandardStatus": "Expired"}])
+    hits = s07.match_expireds(hot, exp)
+    check(len(hits) == 1
+          and hits.iloc[0]["Property Address"] == "99 Church St",
+          "expireds: normalized address match (STREET vs St)")
+
+
 def test_scale():
     """Matcher at real scale: synthesize MOD-IV from the actual master."""
     pq = ROOT / "data/processed/master.parquet"
@@ -414,6 +472,7 @@ def main():
         test_parsers(tmp)
         test_normalizers()
         test_pipeline(tmp)
+    test_spark()
     test_scale()
     print(f"\nAll {PASS} checks passed.")
 

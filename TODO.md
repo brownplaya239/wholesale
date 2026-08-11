@@ -34,6 +34,15 @@
       -> save as data/processed/vacancy_flags.csv (ref_id,vacant) for S3
 - [ ] OPRA requests to top municipalities for registered vacant/abandoned lists
 
+## MOMLS / Spark API (Monmouth coverage only)
+- [ ] Get Spark API token (sparkplatform.com w/ flexmls login, or MOMLS
+      member services); `set SPARK_ACCESS_TOKEN=...`;
+      `python scripts/07_comps.py ping`
+- [ ] `07 suppress` before EVERY mail drop / knock day (unions
+      suppress_manual.csv for the 4 non-MOMLS counties)
+- [ ] `07 expireds` once — overlay failed-retail attempts on the hot list
+- [ ] `07 comps` per live lead (ARV band + MAO + listing number)
+
 ## Before first outreach
 - [ ] NJ RE attorney: draft PSA w/ express assignment clause + assignment addendum
       ($500-1,500 — avoids realtor-form 3-day attorney-review window)
