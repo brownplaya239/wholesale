@@ -544,18 +544,34 @@ def load_listing_suppression(path: Path | None = None) -> set:
                if k in lower), None)
     cc = next((lower[k] for k in ("city", "property city", "town", "municipality")
                if k in lower), None)
+    zc = next((lower[k] for k in ("zip", "zip code", "postal code",
+                                  "postalcode", "property zip code")
+               if k in lower), None)
     if ac is None:
         raise SystemExit(f"{p}: no address-like column found")
-    addr = df[ac].map(normalize_address)
-    city = (df[cc].astype(str).str.upper().str.strip()
+    # street part only (MLS exports often carry full-line addresses); keys on
+    # zip (immune to MLS municipality-vs-postal-city naming) AND on city.
+    addr = df[ac].astype(str).str.split(",").str[0].map(normalize_address)
+    city = (df[cc].astype(str).str.upper().str.strip().fillna("")
             if cc else pd.Series("", index=df.index))
-    return set(zip(addr, city.fillna("")))
+    zips = (df[zc].astype(str).str.strip().str[:5].fillna("")
+            if zc else pd.Series("", index=df.index))
+    keys = set()
+    for a, ci, z in zip(addr, city, zips):
+        if z:
+            keys.add((a, z))
+        if ci:
+            keys.add((a, ci))
+        if not z and not ci:
+            keys.add((a, ""))
+    return keys
 
 
-def is_suppressed(addr: str, city: str, suppress: set) -> bool:
+def is_suppressed(addr: str, city: str, zipc, suppress: set) -> bool:
     a = normalize_address(addr)
-    return (a, str(city or "").upper().strip()) in suppress or \
-        (a, "") in suppress
+    return ((a, str(zipc or "")[:5]) in suppress
+            or (a, str(city or "").upper().strip()) in suppress
+            or (a, "") in suppress)
 
 
 def load_master() -> pd.DataFrame:

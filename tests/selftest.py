@@ -420,15 +420,26 @@ def test_spark():
     check(m["mao"] == 166800 and m["opening_offer"] == 150120,
           "comps: MAO formula per playbook")
 
+    # the real-world trap: MLS lists under the MUNICIPALITY (Middletown)
+    # with a full-line UnparsedAddress; postal city on our side is Belford.
+    # street+zip must still match.
     hot = pd.DataFrame({"Property Address": ["99 Church St", "1 Nope Rd"],
-                        "Property City": ["Belford", "Nowhere"]})
-    exp = s07.rows_to_frame([{"UnparsedAddress": "99 CHURCH STREET",
-                              "City": "BELFORD",
-                              "StandardStatus": "Expired"}])
+                        "Property City": ["Belford", "Nowhere"],
+                        "Property Zip Code": ["07718", "00000"]})
+    exp = s07.rows_to_frame([{
+        "UnparsedAddress": "99 CHURCH STREET, MIDDLETOWN, NJ 07718",
+        "City": "MIDDLETOWN", "PostalCode": "07718",
+        "StandardStatus": "Expired"}])
+    check(exp.iloc[0]["street"] == "99 CHURCH STREET"
+          and exp.iloc[0]["zip"] == "07718",
+          "spark: full-line address split into street + zip")
     hits = s07.match_expireds(hot, exp)
     check(len(hits) == 1
           and hits.iloc[0]["Property Address"] == "99 Church St",
-          "expireds: normalized address match (STREET vs St)")
+          "expireds: street+zip match beats municipality-vs-postal-city")
+    sup_zip = {("99 CHURCH ST", "07718")}
+    check(nc.is_suppressed("99 Church Street", "Belford", "07718", sup_zip),
+          "suppress: zip key matches across city-name mismatch")
 
 
 def test_scale():

@@ -52,8 +52,9 @@ def build_routes(m: pd.DataFrame,
         & (m["cohort"] != "ESTATE_SALE_PRICED")
     ].copy()
     if suppress:
-        listed = [is_suppressed(a, c, suppress) for a, c in
-                  zip(hot["Property Address"], hot["Property City"])]
+        listed = [is_suppressed(a, c, z, suppress) for a, c, z in
+                  zip(hot["Property Address"], hot["Property City"],
+                      hot["Property Zip Code"])]
         if sum(listed):
             print(f"  suppressed {sum(listed)} actively-listed properties")
         hot = hot[[not x for x in listed]]

@@ -52,10 +52,19 @@ RENOVATED_RE = re.compile(
 
 # ---------------------------------------------------------------- helpers --
 def rows_to_frame(rows: list[dict]) -> pd.DataFrame:
-    return pd.DataFrame([
-        {
-            "address": pick(r, "UnparsedAddress", "UnparsedFirstLineAddress",
-                            default=""),
+    out = []
+    for r in rows:
+        ua = str(pick(r, "UnparsedAddress", "UnparsedFirstLineAddress",
+                      default=""))
+        zm = re.search(r"(\d{5})(?:-\d{4})?\s*$", ua)
+        out.append({
+            "address": ua,
+            # UnparsedAddress is usually the FULL line ("99 Church St,
+            # Middletown, NJ 07718") — matching uses the street part + zip,
+            # because MLS city is the municipality, not the postal city.
+            "street": ua.split(",")[0].strip(),
+            "zip": str(pick(r, "PostalCode",
+                            default=zm.group(1) if zm else ""))[:5],
             "city": pick(r, "City", "PostalCity", default=""),
             "status": pick(r, "StandardStatus", "MlsStatus", default=""),
             "close_price": pick(r, "ClosePrice", "ClosedPrice"),
@@ -65,9 +74,8 @@ def rows_to_frame(rows: list[dict]) -> pd.DataFrame:
             "beds": pick(r, "BedroomsTotal"),
             "dom": pick(r, "DaysOnMarket", "CumulativeDaysOnMarket"),
             "remarks": pick(r, "PublicRemarks", default=""),
-        }
-        for r in rows
-    ])
+        })
+    return pd.DataFrame(out)
 
 
 def comp_stats(comps: pd.DataFrame, subject_sqft: float) -> dict:
@@ -108,16 +116,22 @@ def mao(arv_p25: float, sqft: float, rehab_psf: float, margin: float,
 
 
 def match_expireds(hot: pd.DataFrame, exp: pd.DataFrame) -> pd.DataFrame:
-    key = lambda a, c: (normalize_address(a), str(c or "").upper().strip())  # noqa: E731
-    exp_keys = {key(a, c): (a, s, d) for a, c, s, d in zip(
-        exp["address"], exp["city"], exp["status"],
-        exp.get("close_date", pd.Series("", index=exp.index)))}
+    """Street+zip primary key (immune to MLS municipality-vs-postal-city
+    naming); street+city as fallback."""
+    exp_keys: dict = {}
+    for _, e in exp.iterrows():
+        a = normalize_address(e.get("street") or e.get("address"))
+        if str(e.get("zip") or "").strip():
+            exp_keys[(a, str(e["zip"])[:5])] = e["status"]
+        exp_keys[(a, str(e.get("city") or "").upper().strip())] = e["status"]
     hits = []
     for _, r in hot.iterrows():
-        k = key(r["Property Address"], r["Property City"])
-        if k in exp_keys:
-            hits.append({**r, "mls_status": exp_keys[k][1],
-                         "was_listed": True})
+        a = normalize_address(r["Property Address"])
+        k_zip = (a, str(r.get("Property Zip Code") or "")[:5])
+        k_city = (a, str(r.get("Property City") or "").upper().strip())
+        st = exp_keys.get(k_zip) or exp_keys.get(k_city)
+        if st:
+            hits.append({**r, "mls_status": st, "was_listed": True})
     return pd.DataFrame(hits)
 
 
@@ -128,20 +142,24 @@ def cmd_suppress(client: SparkClient) -> None:
            + ")")
     rows = client.query(
         flt=flt,
-        select="UnparsedAddress,City,StandardStatus,ListPrice",
+        select="UnparsedAddress,City,PostalCode,StandardStatus,ListPrice",
     )
-    df = rows_to_frame(rows)[["address", "city", "status", "list_price"]]
+    df = rows_to_frame(rows)[["street", "city", "zip", "status",
+                              "list_price"]].rename(
+        columns={"street": "address"})
     manual = PROCESSED / "suppress_manual.csv"
     n_manual = 0
     if manual.exists():
         mdf = pd.read_csv(manual, dtype=str)
         mdf.columns = [c.lower().strip() for c in mdf.columns]
         mdf = mdf.rename(columns={"property address": "address",
-                                  "property city": "city"})
-        df = pd.concat([df, mdf[["address", "city"]]], ignore_index=True)
+                                  "property city": "city",
+                                  "postal code": "zip", "zip code": "zip"})
+        keep_cols = [c for c in ("address", "city", "zip") if c in mdf]
+        df = pd.concat([df, mdf[keep_cols]], ignore_index=True)
         n_manual = len(mdf)
     dest = PROCESSED / "suppress_active_listings.csv"
-    df.drop_duplicates(subset=["address", "city"]).to_csv(dest, index=False)
+    df.drop_duplicates(subset=["address", "zip"]).to_csv(dest, index=False)
     print(f"{len(rows)} MOMLS active/UC/pending + {n_manual} manual rows "
           f"-> {dest}")
     print("Middlesex/Somerset/Union/Hudson are NOT covered by MOMLS — keep "
@@ -193,13 +211,17 @@ def cmd_expireds(client: SparkClient, args) -> None:
            "or StandardStatus eq 'Canceled') "
            f"and ListingContractDate ge {args.since}")
     rows = client.query(
-        flt=flt, select="UnparsedAddress,City,StandardStatus,ListPrice")
+        flt=flt,
+        select="UnparsedAddress,City,PostalCode,StandardStatus,ListPrice")
     exp = rows_to_frame(rows)
-    hot_csv = PROCESSED / "hot_list.csv"
-    if not hot_csv.exists():
-        raise SystemExit("hot_list.csv not found — build it first (see "
-                         "docs/CONTACT_PLAN.md).")
-    hits = match_expireds(pd.read_csv(hot_csv, dtype=str), exp)
+    src = PROCESSED / "master_status.parquet"
+    if not src.exists():
+        raise SystemExit("Run 02_status_resolution.py first.")
+    m = pd.read_parquet(src)
+    hot = m[((m["cohort"] == "INHERITANCE") | (m["SourceCount"] >= 2))
+            & (m["status"] != "SOLD_ARMS_LENGTH")
+            & (m["cohort"] != "ESTATE_SALE_PRICED")]
+    hits = match_expireds(hot, exp)
     dest = PROCESSED / "hot_list_expired_overlay.csv"
     hits.to_csv(dest, index=False)
     print(f"{len(exp)} expired/withdrawn MOMLS listings since {args.since}; "

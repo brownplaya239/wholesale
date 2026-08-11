@@ -66,8 +66,9 @@ def build_segments(m: pd.DataFrame, vacancy: pd.DataFrame | None,
         | ((m["status"] == "SOLD_NON_USABLE") & (m["cohort"] == "INHERITANCE"))
     ].copy()
     if suppress:
-        listed = [is_suppressed(a, c, suppress) for a, c in
-                  zip(keep["Property Address"], keep["Property City"])]
+        listed = [is_suppressed(a, c, z, suppress) for a, c, z in
+                  zip(keep["Property Address"], keep["Property City"],
+                      keep["Property Zip Code"])]
         n = sum(listed)
         if n:
             print(f"  suppressed {n} actively-listed properties "
