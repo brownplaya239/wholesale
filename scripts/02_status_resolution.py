@@ -84,32 +84,41 @@ def fetch_sr1a(years: range, manual_dir: Path | None) -> pd.DataFrame:
     else:
         SR1A_CACHE.mkdir(parents=True, exist_ok=True)
         s = http_session()
-        links = scrape_links(STATDATA_URL, r"sr.?1.?a.*\.zip", s)
+        # 2026 vintage: yearly files are named Sales<YYYY>.zip, plus a
+        # YTDSR1A<YYYY>.zip for the year in progress.
+        links = scrape_links(STATDATA_URL,
+                             r"(sales\d{4}|sr.?1.?a[^/]*)\.zip", s)
         wanted = [u for u in links
-                  if any(str(y) in u or f"{y % 100:02d}" in Path(u).stem
-                         for y in years)] or links
+                  if any(str(y) in Path(u).stem for y in years)] or links
         if not wanted:
             raise SystemExit(
                 "No SR1A links found on statdata.shtml — download the SR1A "
                 "zips manually and re-run with --sr1a-dir DIR."
             )
         for url in wanted:
+            print(f"  downloading {Path(url).name} ...")
             zp = download(url, SR1A_CACHE / Path(url).name.split("?")[0], s)
             files.extend(extract_data_files(zp, SR1A_CACHE / "extracted"))
         files = sorted(set(files))
 
     frames = []
     for f in files:
-        df = parse_sr1a_file(f)
-        df = df[df["muncode"].str[:2].isin(TARGET_COUNTY_CODES)]
+        df = parse_sr1a_file(f, TARGET_COUNTY_CODES)
         frames.append(df)
         print(f"  SR1A {f.name}: {len(df):,} rows in target counties")
     sr1a = pd.concat(frames, ignore_index=True)
     sr1a = sr1a.drop_duplicates(
         subset=["pin", "sale_date", "sale_price", "grantee_name"]
     )
+    got_years = sorted(sr1a["sale_date"].dt.year.dropna().unique().astype(int))
+    span = f"{got_years[0]}-{got_years[-1]}" if got_years else "none"
+    print(f"SR1A cache: {len(sr1a):,} sales, deed years {span} -> {out_pq}")
+    missing = [y for y in years if y not in got_years]
+    if missing:
+        print(f"  WARNING: no sales with deed year(s) {missing} — if those "
+              "years should exist, their files were not found/parsed. "
+              "'Sold since' will be UNDERSTATED until fixed.")
     sr1a.to_parquet(out_pq, index=False)
-    print(f"SR1A cache: {len(sr1a):,} sales -> {out_pq}")
     return sr1a
 
 
@@ -125,36 +134,47 @@ def fetch_modiv(year: int, manual_dir: Path | None) -> pd.DataFrame:
     else:
         MODIV_CACHE.mkdir(parents=True, exist_ok=True)
         s = http_session()
-        for county in TARGET_COUNTIES:
-            name = county.capitalize()
-            got = None
-            for yr in (year, year - 1):  # current list may not be posted yet
-                url = MODIV_URL_TPL.format(year=yr, county=name,
-                                           yy=f"{yr % 100:02d}")
-                try:
-                    got = download(url, MODIV_CACHE / Path(url).name, s)
-                    break
-                except Exception as e:  # noqa: BLE001 - try prior year
-                    print(f"  {name} {yr}: {e}")
-            if got is None:
-                # last resort: find a county link on the statdata page
-                links = scrape_links(STATDATA_URL,
-                                     rf"{name}\d*\.zip", s)
-                if links:
-                    got = download(links[-1],
-                                   MODIV_CACHE / Path(links[-1]).name, s)
-            if got is None:
-                raise SystemExit(
-                    f"Could not download MOD-IV for {name}. Grab the county "
-                    "zips from statdata.shtml manually and re-run with "
-                    "--modiv-dir DIR."
-                )
-            files.extend(extract_data_files(got, MODIV_CACHE / "extracted"))
+        # 2026 vintage: ONE statewide zip per year (pdf/lpt/modiv-<YYYY>.zip);
+        # the parser filters to our 5 counties while streaming.
+        links = scrape_links(STATDATA_URL, r"modiv[-_]?\d{4}\.zip", s)
+
+        def _yr(u: str) -> int:
+            m = re.search(r"(\d{4})", Path(u).name)
+            return int(m.group(1)) if m else 0
+
+        pick = ([u for u in links if _yr(u) == year]
+                or [u for u in links if _yr(u) == year - 1]
+                or sorted(links, key=_yr)[-1:])
+        if pick:
+            url = pick[-1]
+            print(f"  downloading statewide MOD-IV {Path(url).name} "
+                  "(large file, be patient) ...")
+            zp = download(url, MODIV_CACHE / Path(url).name, s)
+            files.extend(extract_data_files(zp, MODIV_CACHE / "extracted"))
+        else:  # legacy per-county layout (pre-2026 site)
+            for county in TARGET_COUNTIES:
+                name = county.capitalize()
+                got = None
+                for yr in (year, year - 1):
+                    url = MODIV_URL_TPL.format(year=yr, county=name,
+                                               yy=f"{yr % 100:02d}")
+                    try:
+                        got = download(url, MODIV_CACHE / Path(url).name, s)
+                        break
+                    except Exception as e:  # noqa: BLE001 - try prior year
+                        print(f"  {name} {yr}: {e}")
+                if got is None:
+                    raise SystemExit(
+                        f"Could not download MOD-IV for {name}. Grab the "
+                        "zips from statdata.shtml manually and re-run with "
+                        "--modiv-dir DIR."
+                    )
+                files.extend(extract_data_files(got,
+                                                MODIV_CACHE / "extracted"))
 
     frames = []
     for f in sorted(set(files)):
-        df = parse_modiv_file(f)
-        df = df[df["muncode"].str[:2].isin(TARGET_COUNTY_CODES)]
+        df = parse_modiv_file(f, TARGET_COUNTY_CODES)
         frames.append(df)
         print(f"  MOD-IV {f.name}: {len(df):,} parcels")
     modiv = pd.concat(frames, ignore_index=True)

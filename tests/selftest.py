@@ -102,6 +102,10 @@ def test_parsers(tmp: Path):
     ]))
     df = nc.parse_sr1a_file(sr)
     check(len(df) == 3, "SR1A: 3 records parsed")
+    filt = nc.parse_sr1a_file(sr, nc.TARGET_COUNTY_CODES)
+    check(len(filt) == 2 and (filt["muncode"].str[:2]
+          .isin(nc.TARGET_COUNTY_CODES)).all(),
+          "SR1A: county prefilter drops out-of-footprint rows")
     r = df.iloc[0]
     check(r["muncode"] == "1305", "SR1A: muncode assembled")
     check(r["block"] == "123" and r["lot"] == "4", "SR1A: block/lot stripped")

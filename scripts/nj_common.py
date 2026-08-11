@@ -201,14 +201,26 @@ def extract_data_files(zip_path: Path, out_dir: Path) -> list[Path]:
 
 
 # ------------------------------------------------------------ fixed-width --
-def _read_lines(path: Path, min_len: int) -> pd.Series:
-    raw = path.read_bytes().decode("latin-1", errors="replace")
-    lines = [ln for ln in raw.splitlines() if len(ln.strip()) > 0]
+def _read_lines(path: Path, min_len: int,
+                prefixes: set[str] | None = None) -> pd.Series:
+    """Stream lines; optionally keep only lines starting with one of
+    `prefixes` (2-char county codes) — the statewide MOD-IV file is ~2.4GB
+    uncompressed, so filtering before building the frame matters."""
+    lines = []
+    with open(path, "r", encoding="latin-1", errors="replace") as f:
+        for ln in f:
+            ln = ln.rstrip("\r\n")
+            if not ln.strip():
+                continue
+            if prefixes is not None and ln[:2] not in prefixes:
+                continue
+            lines.append(ln)
     return pd.Series(lines, dtype="string").str.pad(min_len, side="right")
 
 
-def parse_fixed(path: Path, layout, reclen: int) -> pd.DataFrame:
-    s = _read_lines(path, reclen)
+def parse_fixed(path: Path, layout, reclen: int,
+                prefixes: set[str] | None = None) -> pd.DataFrame:
+    s = _read_lines(path, reclen, prefixes)
     df = pd.DataFrame({name: s.str[a:a + n].str.strip()
                        for name, a, n in layout})
     return df
@@ -279,7 +291,8 @@ def make_pin(muncode, block, lot, qual=None) -> pd.Series:
 
 
 # ------------------------------------------------------------- SR1A parse --
-def parse_sr1a_file(path: Path) -> pd.DataFrame:
+def parse_sr1a_file(path: Path,
+                    county_prefixes: set[str] | None = None) -> pd.DataFrame:
     delim = sniff_delimited(path)
     if delim is not None:
         df = map_headers(delim, [n for n, _, _ in SR1A_LAYOUT])
@@ -289,8 +302,16 @@ def parse_sr1a_file(path: Path) -> pd.DataFrame:
                 f"{path.name}: delimited SR1A extract missing {missing}; "
                 "extend HEADER_ALIASES in nj_common.py for this vintage."
             )
+        if county_prefixes is not None:
+            df = df[df["county_code"].astype("string").str.zfill(2)
+                    .isin(county_prefixes)]
     else:
-        df = parse_fixed(path, SR1A_LAYOUT, SR1A_RECLEN)
+        df = parse_fixed(path, SR1A_LAYOUT, SR1A_RECLEN, county_prefixes)
+        if len(df) == 0:
+            raise RuntimeError(
+                f"{path.name}: no rows for target counties — file empty or "
+                "layout drift vs SR1Afilelayout.pdf."
+            )
         ok = df["county_code"].str.fullmatch(r"0[1-9]|1\d|2[01]").fillna(False)
         if ok.mean() < 0.95:
             raise RuntimeError(
@@ -330,7 +351,8 @@ def parse_sr1a_file(path: Path) -> pd.DataFrame:
     return out
 
 
-def parse_modiv_file(path: Path) -> pd.DataFrame:
+def parse_modiv_file(path: Path,
+                     county_prefixes: set[str] | None = None) -> pd.DataFrame:
     delim = sniff_delimited(path)
     if delim is not None:
         df = map_headers(delim, [n for n, _, _ in MODIV_LAYOUT])
@@ -339,10 +361,18 @@ def parse_modiv_file(path: Path) -> pd.DataFrame:
                 f"{path.name}: delimited MOD-IV extract missing key columns; "
                 "extend HEADER_ALIASES in nj_common.py."
             )
+        if county_prefixes is not None:
+            df = df[df["muncode"].astype("string").str[:2]
+                    .isin(county_prefixes)]
         df["block"] = df["block_raw"].astype("string").str.strip()
         df["lot"] = df["lot_raw"].astype("string").str.strip()
     else:
-        df = parse_fixed(path, MODIV_LAYOUT, MODIV_RECLEN)
+        df = parse_fixed(path, MODIV_LAYOUT, MODIV_RECLEN, county_prefixes)
+        if len(df) == 0:
+            raise RuntimeError(
+                f"{path.name}: no rows for target counties — file empty or "
+                "layout drift vs the MOD-IV spec."
+            )
         ok = df["muncode"].str.fullmatch(r"\d{4}").fillna(False)
         if ok.mean() < 0.95:
             raise RuntimeError(
