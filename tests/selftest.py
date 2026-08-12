@@ -375,6 +375,26 @@ def test_pipeline(tmp: Path):
     check(list(knock["stop"]) == list(range(1, len(knock) + 1)),
           "routes: sequential stop numbers")
 
+    print("\n[6b] OPRA owner merge")
+    cache_pq = tmp / "modiv_cache.parquet"
+    blank = modiv.copy()
+    blank["owner_name"] = ""
+    blank.to_parquet(cache_pq, index=False)
+    opra = tmp / "opra_monmouth.txt"
+    opra.write_text(
+        "muncode|block|lot|qual|property location|owner name|"
+        "owner address|owner city|owner zip\n"
+        "1305|123|4||15 OAK ST|DOE, JANE|15 OAK ST|HAZLET NJ|07730\n"
+    )
+    s02.merge_owners(opra, cache_pq)
+    merged = pd.read_parquet(cache_pq)
+    row = merged[merged["pin"] == "1305_123_4"]
+    check(row["owner_name"].iloc[0] == "DOE, JANE",
+          "merge-owners: OPRA name fills blank cache row")
+    others = merged[merged["pin"] != "1305_123_4"]["owner_name"]
+    check(others.fillna("").str.strip().eq("").all(),
+          "merge-owners: untouched counties stay as-is")
+
     print("\n[7b] target board")
     ov = pd.DataFrame([{"pkey": "9 ELM AVE|HAZLET", "mls_type": "RENTED",
                         "mls_close_date": ""}])

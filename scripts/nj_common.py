@@ -266,7 +266,9 @@ def yymmdd_to_date(s: pd.Series) -> pd.Series:
     return pd.to_datetime(iso, format="%Y-%m-%d", errors="coerce")
 
 
-def to_num(s: pd.Series) -> pd.Series:
+def to_num(s: pd.Series | None) -> pd.Series:
+    if s is None:  # optional column absent in a delimited/OPRA extract
+        return pd.Series(dtype="float64")
     return pd.to_numeric(
         s.astype("string").str.replace(r"[^\d.\-]", "", regex=True),
         errors="coerce",
@@ -348,7 +350,10 @@ def parse_sr1a_file(path: Path,
 
 def parse_modiv_file(path: Path,
                      county_prefixes: set[str] | None = None) -> pd.DataFrame:
-    delim = sniff_delimited(path)
+    if path.suffix.lower() in (".xlsx", ".xls"):  # OPRA responses often are
+        delim = pd.read_excel(path, dtype=str)
+    else:
+        delim = sniff_delimited(path)
     if delim is not None:
         df = map_headers(delim, [n for n, _, _ in MODIV_LAYOUT])
         if "muncode" not in df.columns or "owner_name" not in df.columns:

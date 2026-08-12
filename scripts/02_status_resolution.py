@@ -245,6 +245,47 @@ def fetch_njgin(layer_url: str | None) -> pd.DataFrame | None:
     return None
 
 
+def merge_owners(file: Path, cache_pq: Path | None = None) -> None:
+    """Overlay owner names from an OPRA'd county tax list onto the cache.
+
+    The statewide download blanks all owner names; OPRA files arrive one
+    county at a time (fixed-width, CSV, or Excel — auto-detected). This
+    fills owner fields by parcel pin wherever the OPRA file has a name,
+    leaves other counties untouched, and appends parcels we didn't have.
+    Then: `resolve` upgrades NO_SALE_OWNER_UNVERIFIED rows to real
+    SAME_OWNER / OWNER_CHANGED_NO_SALE for that county.
+    """
+    pq = cache_pq or (CACHE / "modiv.parquet")
+    if not pq.exists():
+        raise SystemExit("No MOD-IV cache — run fetch first.")
+    new = parse_modiv_file(Path(file), TARGET_COUNTY_CODES)
+    good = new[new["owner_name"].fillna("").str.strip().ne("")].copy()
+    if len(good) == 0:
+        raise SystemExit(
+            f"{file}: parsed {len(new):,} rows but zero owner names — "
+            "wrong file, or its column names need an alias in "
+            "nj_common.HEADER_ALIASES (paste the header row into the chat)."
+        )
+    modiv = pd.read_parquet(pq)
+    key = modiv["pin"].astype(str) + "|" + modiv["qual"].fillna("").astype(str)
+    nkey = good["pin"].astype(str) + "|" + good["qual"].fillna("").astype(str)
+    good = good.assign(_k=nkey).drop_duplicates("_k")
+    before = modiv["owner_name"].fillna("").str.strip().ne("").sum()
+    for col in ["owner_name", "owner_address", "owner_city", "owner_zip"]:
+        if col in good.columns:
+            vals = key.map(dict(zip(good["_k"], good[col])))
+            keep_new = vals.notna() & vals.astype("string").str.strip().ne("")
+            modiv[col] = vals.where(keep_new, modiv[col])
+    extra = good[~good["_k"].isin(set(key))].drop(columns="_k")
+    if len(extra):
+        modiv = pd.concat([modiv, extra], ignore_index=True)
+    modiv.to_parquet(pq, index=False)
+    after = modiv["owner_name"].fillna("").str.strip().ne("").sum()
+    print(f"Owner names: {before:,} -> {after:,} of {len(modiv):,} parcels "
+          f"(+{len(extra):,} new parcels appended)")
+    print("Next: python scripts/02_status_resolution.py resolve")
+
+
 # ---------------------------------------------------------------- matching --
 def match_addresses(master: pd.DataFrame, modiv: pd.DataFrame,
                     mun_names: pd.DataFrame | None = None) -> pd.DataFrame:
@@ -444,8 +485,12 @@ def report(m: pd.DataFrame) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("command", choices=["fetch", "resolve", "all"],
+    ap.add_argument("command",
+                    choices=["fetch", "resolve", "all", "merge-owners"],
                     nargs="?", default="all")
+    ap.add_argument("--file", type=Path,
+                    help="merge-owners: an OPRA'd county tax list "
+                         "(fixed-width .txt, .csv, or .xlsx)")
     ap.add_argument("--years", default=f"2020-{date.today().year}")
     ap.add_argument("--sr1a-dir", type=Path)
     ap.add_argument("--modiv-dir", type=Path)
@@ -456,6 +501,12 @@ def main() -> None:
     args = ap.parse_args()
     y0, y1 = (int(x) for x in args.years.split("-"))
     CACHE.mkdir(parents=True, exist_ok=True)
+
+    if args.command == "merge-owners":
+        if not args.file:
+            raise SystemExit("merge-owners requires --file PATH")
+        merge_owners(args.file)
+        return
 
     if args.command in ("fetch", "all"):
         fetch_sr1a(range(y0, y1 + 1), args.sr1a_dir)
