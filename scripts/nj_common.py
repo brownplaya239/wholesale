@@ -186,7 +186,9 @@ def extract_data_files(zip_path: Path, out_dir: Path) -> list[Path]:
     with zipfile.ZipFile(zip_path) as z:
         for name in z.namelist():
             if re.search(r"\.(txt|csv|dat|psv)$", name, re.I):
-                target = out_dir / Path(name).name
+                # flatten subfolders into unique names — town-by-town zips
+                # carry the SAME basename in every subfolder
+                target = out_dir / "_".join(Path(name).parts)
                 if not target.exists():
                     with z.open(name) as src, open(target, "wb") as dst:
                         dst.write(src.read())

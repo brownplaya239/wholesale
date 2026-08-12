@@ -389,6 +389,22 @@ def test_pipeline(tmp: Path):
     )
     (opra_dir / "readme.txt").write_text("This is not a tax list.\n")
     s02.merge_owners(opra_dir, cache_pq)
+    import zipfile as _zf
+    zp = tmp / "mastfile.zip"
+    with _zf.ZipFile(zp, "w") as z:  # same basename in every subfolder
+        z.writestr("town01/mastfile.txt",
+                   "muncode|block|lot|qual|property location|owner name|"
+                   "owner address|owner city|owner zip\n"
+                   "1305|123|4||15 OAK ST|DOE, JANE|15 OAK ST|HAZLET NJ|"
+                   "07730\n")
+        z.writestr("town02/mastfile.txt",
+                   "muncode|block|lot|qual|property location|owner name|"
+                   "owner address|owner city|owner zip\n"
+                   "1305|200|7||9 ELM AVENUE|SMITH, ALICE|9 ELM AVE|"
+                   "HAZLET NJ|07730\n")
+    got = nc.extract_data_files(zp, tmp / "zx")
+    check(len(set(got)) == 2,
+          "zip extract: same-basename subfolder members kept distinct")
     merged = pd.read_parquet(cache_pq)
     row = merged[merged["pin"] == "1305_123_4"]
     check(row["owner_name"].iloc[0] == "DOE, JANE",
