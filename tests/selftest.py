@@ -380,13 +380,15 @@ def test_pipeline(tmp: Path):
     blank = modiv.copy()
     blank["owner_name"] = ""
     blank.to_parquet(cache_pq, index=False)
-    opra = tmp / "opra_monmouth.txt"
-    opra.write_text(
+    opra_dir = tmp / "opra_monmouth"
+    opra_dir.mkdir()
+    (opra_dir / "town1.txt").write_text(
         "muncode|block|lot|qual|property location|owner name|"
         "owner address|owner city|owner zip\n"
         "1305|123|4||15 OAK ST|DOE, JANE|15 OAK ST|HAZLET NJ|07730\n"
     )
-    s02.merge_owners(opra, cache_pq)
+    (opra_dir / "readme.txt").write_text("This is not a tax list.\n")
+    s02.merge_owners(opra_dir, cache_pq)
     merged = pd.read_parquet(cache_pq)
     row = merged[merged["pin"] == "1305_123_4"]
     check(row["owner_name"].iloc[0] == "DOE, JANE",

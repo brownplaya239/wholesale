@@ -258,7 +258,29 @@ def merge_owners(file: Path, cache_pq: Path | None = None) -> None:
     pq = cache_pq or (CACHE / "modiv.parquet")
     if not pq.exists():
         raise SystemExit("No MOD-IV cache — run fetch first.")
-    new = parse_modiv_file(Path(file), TARGET_COUNTY_CODES)
+    p = Path(file)
+    if p.suffix.lower() == ".zip":  # OPRA responses often ship town-by-town
+        files = extract_data_files(p, CACHE / "opra_extract" / p.stem)
+    elif p.is_dir():
+        files = sorted(f for f in p.iterdir()
+                       if f.suffix.lower() in (".txt", ".csv", ".dat",
+                                               ".psv", ".xlsx", ".xls"))
+    else:
+        files = [p]
+    if not files:
+        raise SystemExit(f"{p}: no data files found")
+    frames = []
+    for f in files:
+        try:
+            df = parse_modiv_file(f, TARGET_COUNTY_CODES)
+            if len(df):
+                frames.append(df)
+                print(f"  {f.name}: {len(df):,} parcels")
+        except Exception as e:  # noqa: BLE001 — skip stray non-data files
+            print(f"  {f.name}: skipped ({e})")
+    if not frames:
+        raise SystemExit("No parseable tax-list files found in the input.")
+    new = pd.concat(frames, ignore_index=True)
     good = new[new["owner_name"].fillna("").str.strip().ne("")].copy()
     if len(good) == 0:
         raise SystemExit(
