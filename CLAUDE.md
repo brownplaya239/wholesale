@@ -16,11 +16,12 @@ Owner: Sum. Footprint: Monmouth, Middlesex, Somerset, Union, Hudson counties, NJ
   appreciation-factor input cell (yellow, default 1.50) that drives Adj Est Value /
   Adj Equity formulas on the Master sheet.
 - `scripts/01_consolidate_and_score.py` reproduces the processed workbook from raw.
-- `docs/BUSINESS_PLAN.md` (2026-08-13) — multi-state launch plan: fresh
-  LandInsights lists (land + houses), outsourced cold callers, PPC on
-  HouseSoldNJ.com; phased NJ (8 counties) → PA (Chester/Lancaster/Berks,
-  GATED on Act 52 licensing) → FL (Martin/Palm Beach, FTSA dialing config).
-  The old-list revival below continues as its own track.
+- `docs/BUSINESS_PLAN.md` (2026-08-13) — launch plan: fresh LandInsights
+  lists (land + houses), outsourced cold callers, PPC on HouseSoldNJ.com.
+  NJ-only launch (8 counties, 3 waves); PA (Chester/Lancaster/Berks, GATED
+  on Act 52 licensing) then FL (Martin/Palm Beach, FTSA dialing config)
+  expand on performance triggers, same system. The old-list revival below
+  continues as its own track.
 - Pipeline scripts 02-05 are IMPLEMENTED (2026-08-11) with an offline test rig
   (`python tests/selftest.py`, 55 checks: parsers, matcher, decision map, all
   downstream exports). `scripts/nj_common.py` holds the SR1A (665-char) and

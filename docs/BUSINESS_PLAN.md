@@ -2,8 +2,9 @@
 
 Drafted 2026-08-13. Companion to docs/PLAYBOOK.md (NJ old-list revival, which
 continues as its own track). This doc covers the NEW engine: fresh LandInsights
-data, outsourced cold callers (Vita Talent Staffing), and PPC on HouseSoldNJ.com,
-across NJ / PA / FL. Verify every legal statement with counsel per state before
+data, outsourced cold callers (Vita Talent Staffing), and PPC on HouseSoldNJ.com.
+**Launch is NJ-only; PA and FL expand later on performance triggers, running the
+same system (§2).** Verify every legal statement with counsel per state before
 first dial — statutes cited are current as of drafting.
 
 ## 1. Thesis and model
@@ -30,35 +31,53 @@ Two product lines, one system:
 | Primary channels | PPC + cold call + mail | Cold call + blind-offer mail |
 | Dispo | Cash-buyer list (script 03 harvest) | Neighbors, builders, Land.com/LandWatch, FB land groups |
 
-Land is the wedge in the FL and outer-NJ counties (Cumberland, Cape May,
-Burlington pinelands edges) and in Lancaster/Berks; houses carry NJ core and
-Chester County.
+Land is the wedge in the outer-NJ counties (Cumberland, Cape May, Burlington
+pinelands edges) now, and in Lancaster/Berks + FL when expansion triggers fire;
+houses carry the NJ core.
 
-## 2. Market rollout — phased, not simultaneous
+## 2. Market rollout — NJ first, expand on triggers, same system
 
 Launching 13 counties in 3 states at once guarantees mediocre data, spam-flagged
-numbers, and zero follow-up depth everywhere. Phase it:
+numbers, and zero follow-up depth everywhere. **Launch is NJ-only**: every
+caller-hour, PPC dollar, and mail piece concentrates in the 8 NJ counties.
+Concentration compounds everything that actually wins deals — number
+reputation, follow-up depth, dispo-bench density, market knowledge on
+appointments — and NJ is the one state where the license already works, the
+SR1A/MOD-IV pipeline is native, and the legal regime is the simplest
+(one-party recording, 8am-9pm, no FTSA caps, no Act 52).
 
-**Phase 1 — NJ (weeks 1-6): Monmouth, Ocean, Middlesex, Hudson, Bergen,
-Burlington, Cape May, Cumberland.**
-Home field: licensed here, buyer list already being harvested (script 03), the
-SR1A/MOD-IV status-resolution pipeline is *statewide* — adding Ocean, Bergen,
-Burlington, Cape May, Cumberland is a config change to scripts 02-08, not new
-build. Sub-priority inside Phase 1: (a) Monmouth/Ocean/Middlesex houses —
-existing turf and buyer depth; (b) Burlington houses — cheapest entry point,
-strong investor demand off the Philly side; (c) Cumberland + Cape May land;
-(d) Hudson/Bergen last — highest prices, highest competition, best per-deal fees.
+**County waves inside NJ (Monmouth, Ocean, Middlesex, Hudson, Bergen,
+Burlington, Cape May, Cumberland):**
+- **Wave 1 (wk 3):** Monmouth / Ocean / Middlesex houses — existing turf,
+  buyer depth from the script 03 harvest.
+- **Wave 2 (wk 5-6):** Burlington houses (cheapest entry, Philly-side investor
+  demand) + Cumberland / Cape May land.
+- **Wave 3 (wk 9+):** Hudson / Bergen — highest prices, heaviest competition,
+  best per-deal fees; enter with a proven pitch, not a rookie one.
 
-**Phase 2 — PA (weeks 6-12): Chester, Lancaster, Berks (Reading).**
-GATED on the Act 52 licensing decision (§4). Reading is the volume market
-(low price points, heavy investor activity), Lancaster is steady mid-market plus
-serious land/farmette dispo demand, Chester is the fee market (Philly Main Line
-spillover). Do not open PA phones until the gate clears.
+Adding these counties is a config change to scripts 02-08, not new build — the
+state files are statewide.
 
-**Phase 3 — FL (weeks 10-16): Martin, Palm Beach.**
-Most competitive, strictest calling law (FTSA), fully remote. Launch last, land
-first (Palm Beach Acreage/Loxahatchee, western Martin/Indiantown corridors),
-houses once a dispo bench exists. FL dialing runs a tightened config (§4).
+**Out-of-state expansion — trigger-based, not calendar-based.** PA first
+(Chester, Lancaster, Berks/Reading), then FL (Martin, Palm Beach). Expand only
+when ALL of these are true:
+1. NJ at ≥3 contracts/month for 2 consecutive months;
+2. QA-passed lead cost inside $100 for 4+ straight weeks;
+3. follow-up SLAs green (no aging pipeline violations);
+4. 3+ months of opex banked from deal flow, not savings;
+5. a lead manager in seat, freeing Sum's calendar for the new market's
+   appointments;
+6. the state's legal gate is clear — for PA that's Act 52 licensing (§4).
+   Cheap head start: begin the PA salesperson coursework in the background
+   during NJ ramp so the gate is already open the day the triggers fire.
+
+Expansion is the SAME system pointed at a new state — new list pull, new
+compliance config in the dialer, new attorney/title bench, same CRM, same
+scripts, same QA, same KPIs. The market-open rule below is the entire
+expansion playbook. Market intel for when the time comes: Reading is PA's
+volume market, Lancaster mid-market + land/farmette dispo, Chester the fee
+market; FL opens land-first (Palm Beach Acreage/Loxahatchee, western
+Martin/Indiantown) under the tightened FTSA config (§4).
 
 Rule: a market is "open" only when it has (1) scrubbed list loaded, (2) buyer
 bench of 10+ verified names, (3) compliance config set in the dialer, (4) an
@@ -140,6 +159,10 @@ FL 3-attempt cap reached) automatically falls into the mail track instead.
 Budget $1-1.5k/mo Phase 1.
 
 ## 4. Compliance gates — per state (blockers, not paperwork)
+
+Only the NJ column is operative at launch. The PA/FL columns are pre-researched
+expansion intel — kept current so the trigger-fire in §2 doesn't stall on legal
+homework.
 
 Federal baseline everywhere (unchanged PLAYBOOK hard rules): **no AI outbound
 voice, no ringless VM, no bulk SMS — zero consent artifacts exist on any of
@@ -246,47 +269,53 @@ Cadence: daily 15-min huddle (dials, contacts, leads, appointments — leading
 indicators only); weekly pipeline review (offers out, aging follow-ups, dispo);
 monthly per-channel CAC and cost-per-deal review against §9 kill lines.
 
-## 7. Budget and unit economics (steady-state Phase 1+2, ~month 4)
+## 7. Budget and unit economics (NJ-only steady state, ~month 4)
 
 | Line | $/mo |
 |---|---|
-| Callers (2-4 FTE, loaded) | 3,500-7,000 |
-| Data + skip trace (LandInsights) | 400-800 |
-| CRM + dialer + numbers + call tracking | 500-800 |
-| PPC spend + management | 3,500-6,000 |
+| Callers (2 FTE, loaded) | 3,500-4,500 |
+| Data + skip trace (LandInsights) | 300-500 |
+| CRM + dialer + numbers + call tracking | 400-600 |
+| PPC spend + management | 3,000-5,000 |
 | Direct mail | 1,000-1,500 |
-| Compliance (scrubs, counsel amortized), misc | 400-700 |
-| **Total** | **~9,300-16,800** |
+| Compliance (scrubs, counsel amortized), misc | 300-500 |
+| **Total** | **~8,500-12,600** |
 
-Expected output at maturity (month 4-6): cold call 2-4 contracts/mo, PPC 1-2,
-mail 0.5-1 → **3-6 closings/mo** at a blended $12-18k fee → $45-90k/mo gross
-against ~$10-17k opex. Ramp honestly: months 1-2 = 1-2 deals total (pipeline
-filling), month 3 = 2-3. Cost-per-deal by channel: cold call $1.5-3.5k, PPC
-$2.5-6k, mail $3-6k. Twelve-month conservative case: 30-40 deals, $450-650k
-gross. Cash reserve required at start: ~$40-50k (3 months opex + EMD float +
-one transactional-funding round).
+Expected output at maturity (month 4-6, NJ alone): cold call 1.5-3 contracts/mo,
+PPC 1-2, mail 0.5-1 → **2.5-5 closings/mo** at NJ's blended $15-22k fee →
+$40-90k/mo gross against ~$9-13k opex. Ramp honestly: months 1-2 = 1-2 deals
+total (pipeline filling), month 3 = 2-3. Cost-per-deal by channel: cold call
+$1.5-3.5k, PPC $2.5-6k, mail $3-6k. Twelve-month conservative case, NJ-only:
+20-30 deals, $350-550k gross — before any expansion revenue. Cash reserve at
+start: ~$35-45k (3 months opex + EMD float + one transactional-funding round).
+When the §2 triggers fire, each new state adds roughly $4-6k/mo (a 2-caller
+pod + data + its share of mail) and should be funded from NJ deal flow, not
+new capital.
 
-## 8. 90-day launch calendar
+## 8. 90-day launch calendar (all NJ)
 
-- **Wk 1-2 — Infrastructure.** CRM + dialer + numbers registered; compliance
-  configs per §4 loaded; counsel engaged NJ (opinion letter) + PA (Act 52 path);
-  Vita Talent audit + 2 callers contracted; LandInsights account, first NJ
-  pulls (Monmouth/Ocean/Middlesex houses; Cumberland/Cape May land); scrub +
-  suppress + load; HouseSoldNJ.com rebuild started; PA license enrollment if
-  path 1.
-- **Wk 3-4 — NJ phones live.** Callers ramp on NJ house lists; Sum runs every
-  appointment; mail drop 1 on stacked segments; buyer-bench blast to script 03
-  harvest output; site done, PPC in learning mode at $100-150/day NJ-only.
-- **Wk 5-8 — First closings + PA prep.** Follow-up cadence compounding; first
+- **Wk 1-2 — Infrastructure.** CRM + dialer + numbers registered; NJ compliance
+  config per §4 loaded; NJ counsel engaged (opinion letter, PSA template);
+  Vita Talent audit + 2 callers contracted; LandInsights account, wave-1 pulls
+  (Monmouth/Ocean/Middlesex houses); scrub + suppress + load; HouseSoldNJ.com
+  rebuild started. Optional background thread: enroll in PA pre-license
+  coursework so the Act 52 gate is open before it's needed.
+- **Wk 3-4 — Phones live (wave 1).** Callers ramp on the house lists; Sum runs
+  every appointment; mail drop 1 on stacked segments; buyer-bench blast to
+  script 03 harvest output; site done, PPC in learning mode at $100-150/day.
+- **Wk 5-8 — First contracts + wave 2.** Follow-up cadence compounding; first
   1-2 contracts expected; PPC first optimization pass (search-terms scrub,
-  county bid tiers); Berks/Lancaster/Chester lists pulled + scrubbed; PA
-  broker affiliation / counsel sign-off closes the PA gate; PA buyer-bench
-  harvest from recorder data.
-- **Wk 9-12 — PA live, FL prep.** PA pod dials (Reading volume first); NJ pod
-  at full follow-up depth; FL config built (8-8, 3/24h, FDACS, click-to-dial),
-  FL counsel + title lined up, Martin/Palm Beach land lists pulled; scale to
-  caller #3-4 only if QA-passed-lead cost is inside $100.
-- **Wk 13+ — FL land live.** Review everything against §9; kill or scale.
+  county bid tiers); wave-2 lists pulled + scrubbed (Burlington houses,
+  Cumberland/Cape May land); land dispo channels stood up (neighbor letters,
+  Land.com/LandWatch, builder contacts).
+- **Wk 9-12 — Wave 3 + deepen.** Hudson/Bergen lists live; caller #3 only if
+  QA-passed-lead cost is inside $100; dispo bench pushed past 25 verified
+  names; dead-lead list-track review (licensed dual-track) running; first
+  reading of the §2 expansion triggers — expected verdict at day 90 is
+  "not yet," and that's fine.
+- **Post-90 — Expansion on triggers, not dates.** When §2 fires: PA first
+  (gate must be clear), FL after, each via the market-open rule. Same system,
+  new state.
 
 ## 9. Kill criteria and risk rails (decide now, not in the moment)
 
