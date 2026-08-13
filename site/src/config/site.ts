@@ -9,7 +9,8 @@
 
 export const site = {
   domain: "housesoldnj.com",
-  url: "https://housesoldnj.com",
+  // www is the primary host (apex 308-redirects to it) — keep canonical URLs on www.
+  url: "https://www.housesoldnj.com",
   name: "House Sold NJ",
 
   // ── The named, licensed principal ──────────────────────────────────────────
