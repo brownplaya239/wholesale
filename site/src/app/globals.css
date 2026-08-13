@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+/*
+ * Calm-professional palette (spec §1: competent office, not used-car lot).
+ * Warm off-white ground, deep navy ink, one amber CTA color used ONLY for
+ * conversion actions so the eye always knows where the button is.
+ */
+@theme {
+  --color-cream: #faf9f6;
+  --color-ink: #1c2b39;
+  --color-ink-soft: #51616f;
+  --color-line: #e5e1d8;
+  --color-accent: #b45309;
+  --color-accent-hover: #92400e;
+  --color-trust: #15803d;
+  --color-panel: #ffffff;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-cream text-ink antialiased;
+}
+
+/* Thumb-sized tap targets everywhere on mobile (spec §1). */
+button,
+a.btn,
+input,
+select {
+  min-height: 48px;
+}
+
+/* CallRail DNI swap target — every visible phone number carries this class. */
+.dni-phone {
+  white-space: nowrap;
+}
