@@ -26,6 +26,14 @@ Owner: Sum. Footprint: Monmouth, Middlesex, Somerset, Union, Hudson counties, NJ
   path could NOT be exercised from the dev sandbox (nj.gov egress blocked):
   first real `02 fetch` happens on a normal machine, with --sr1a-dir /
   --modiv-dir as the manual fallback if Treasury moved the links.
+- `site/` — HouseSoldNJ.com conversion site (2026-08-13): Next.js 15 +
+  Tailwind 4, built to the PPC conversion spec. County/situation pages from
+  `site/src/data/`, /lp/{campaign} noindexed landing variants with param-driven
+  headlines, two-step lead form with per-lead TCPA consent artifact, delivery
+  via CRM webhook + Resend + Slack (env-gated). ALL business facts are
+  placeholders in `site/src/config/site.ts`; launch checklist in
+  `site/README.md`. Deploy: Vercel, root dir `site/`. Web leads with stored
+  consent are the ONLY texting lane this business has.
 
 ## Pipeline (docs/PLAYBOOK.md has full detail + budget)
 
