@@ -121,12 +121,10 @@ state.
 
 ### 3b. PPC on HouseSoldNJ.com — the intent channel
 
-- **Site**: rebuild as a conversion page, not a brochure: one hero with address
-  + phone form above the fold, 2-step form (address → contact), instant
-  click-to-call, testimonials/proof, county landing pages
-  (housesoldnj.com/monmouth-county etc.), <2s mobile load. Carrot-style
-  template or lean Next.js — either is fine; conversion structure matters more
-  than stack. Target 15-25% form conversion on paid traffic.
+- **Site**: rebuild as a conversion page, not a brochure — full design/feature
+  spec + tech stack in docs/WEBSITE_SPEC.md (Next.js on Vercel, 2-step
+  address-first form, consent capture, county/situation pages, CallRail).
+  Target 15-25% form conversion on paid traffic.
 - **Domain strategy**: the NJ-branded domain HELPS Quality Score and trust in
   NJ — run all NJ spend on it. Do NOT stretch "HouseSoldNJ" to PA/FL: buy two
   sibling domains later (e.g., a PA and an FL equivalent) and clone the build.
