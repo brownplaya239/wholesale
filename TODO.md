@@ -1,5 +1,11 @@
 # TODO — Wholesaling 8.11.2026
 
+## Deals under evaluation
+- [ ] 701-703 Monroe Ave, Asbury Park (Block 2608 Lot 7) — dossier + massing
+      test + deal screen in docs/deals/701-703-monroe-asbury-park/. Verdict:
+      pass at $2.5M ask (risk-adjusted ~$1.1M). Open items: zoning
+      determination letter, OPRA package, 700 Monroe amendment status.
+
 ## Now (blocking everything else)
 - [x] Implement `scripts/02_status_resolution.py` (2026-08-11):
   - [x] fetch_sr1a: scrapes statdata.shtml links, fixed-width parse per
