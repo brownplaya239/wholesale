@@ -132,9 +132,7 @@ export function AboutSum({ compact = false }: { compact?: boolean }) {
         className="h-28 w-28 rounded-full border-2 border-line object-cover"
       />
       <div className="text-center sm:text-left">
-        <p className="text-lg font-bold">
-          {site.principal.fullName} ("{site.principal.firstName}")
-        </p>
+        <p className="text-lg font-bold">{site.principal.fullName}</p>
         <p className="text-sm font-medium text-trust">
           {site.principal.licenseLine}
           {site.principal.brokerage && ` · ${site.principal.brokerage}`}

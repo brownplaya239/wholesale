@@ -48,7 +48,7 @@ export const situations: Situation[] = [
       {
         heading: "Cash offer or list it — the estate's choice",
         body:
-          "Sometimes the right answer for the heirs is a fast, certain cash sale. Sometimes it's listing the house to maximize the estate. We'll show you both numbers honestly — Sum is a licensed NJ agent and can do either.",
+          "Sometimes the right answer for the heirs is a fast, certain cash sale. Sometimes it's listing the house to maximize the estate. We'll show you both numbers honestly — Sumeet is a licensed NJ agent and can do either.",
       },
     ],
     faq: [
@@ -90,7 +90,7 @@ export const situations: Situation[] = [
       {
         heading: "Two honest numbers",
         body:
-          "We'll give you a cash offer AND what we think it would net after listing, repairs, and time on market. If listing wins for you, Sum can list it — that's the licensed-agent advantage.",
+          "We'll give you a cash offer AND what we think it would net after listing, repairs, and time on market. If listing wins for you, Sumeet can list it — that's the licensed-agent advantage.",
       },
     ],
     faq: [
@@ -216,7 +216,7 @@ export const situations: Situation[] = [
       {
         heading: "Or list it — with the math in writing",
         body:
-          "If the settlement timeline allows and listing nets meaningfully more, we'll say so and show the comparison. Sum is a licensed NJ agent; both paths are on the table.",
+          "If the settlement timeline allows and listing nets meaningfully more, we'll say so and show the comparison. Sumeet is a licensed NJ agent; both paths are on the table.",
       },
     ],
     faq: [

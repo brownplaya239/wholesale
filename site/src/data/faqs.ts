@@ -32,6 +32,6 @@ export const mainFaqs: Faq[] = [
   },
   {
     q: "Are you agents or investors?",
-    a: "Both, and we're upfront about it. Sum is a licensed NJ real estate salesperson who buys houses directly. That's why we can honestly show you two numbers on every house: our cash offer, and what listing would likely net you. You pick.",
+    a: "Both, and we're upfront about it. Sumeet is a licensed NJ real estate salesperson who buys houses directly. That's why we can honestly show you two numbers on every house: our cash offer, and what listing would likely net you. You pick.",
   },
 ];

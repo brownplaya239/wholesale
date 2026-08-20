@@ -15,12 +15,12 @@ export const site = {
 
   // ── The named, licensed principal ──────────────────────────────────────────
   principal: {
-    firstName: "Sum",
-    fullName: "Sumeet Sancheti", // TODO: confirm exact name as licensed
+    firstName: "Sumeet",
+    fullName: "Sumeet Sancheti",
     // NJ REC advertising disclosure — license status in writing on every page.
     licenseLine: "NJ Licensed Real Estate Salesperson",
-    licenseNumber: "", // TODO: e.g. "2612345678" — shown in footer when set
-    brokerage: "", // TODO: brokerage name — REQUIRED by NJ REC before launch
+    licenseNumber: "2082408",
+    brokerage: "Coldwell Banker Realty",
     // TODO: add a real photo as site/public/sum.jpg and change this to "/sum.jpg"
     photo: "/sum-placeholder.svg",
     base: "Based in Monmouth County",
@@ -28,17 +28,19 @@ export const site = {
 
   // ── Contact ────────────────────────────────────────────────────────────────
   phone: {
-    // TODO: replace with the CallRail-tracked local NJ number (never toll-free).
-    display: "(732) 555-0199",
-    e164: "+17325550199",
+    // Sumeet's cell. TODO: swap for a CallRail-tracked local number before
+    // scaling ad spend (keeps attribution; never toll-free).
+    display: "(908) 596-0242",
+    e164: "+19085960242",
     hours: "8am–9pm, 7 days",
   },
-  email: "sum@housesoldnj.com", // TODO: confirm
+  email: "sum@housesoldnj.com", // TODO: confirm this inbox exists on the domain
 
   // ── Legal entity (footer facts — anonymous footers kill trust) ─────────────
   legal: {
     entityName: "", // TODO: e.g. "House Sold NJ LLC" — falls back to site name
-    officeAddress: "", // TODO: street address, city, NJ zip
+    officeAddress:
+      "Coldwell Banker Realty — Monmouth-Ocean Regional Office, 335 Route 9 South, Manalapan, NJ 07726 · Office (732) 462-4242",
   },
 
   // ── Proof numbers — only shown when set; never fake these ──────────────────
