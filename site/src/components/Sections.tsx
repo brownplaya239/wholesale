@@ -33,36 +33,49 @@ export function SectionTitle({ children }: { children: React.ReactNode }) {
 export function HonestBroker() {
   return (
     <Section tinted>
-      <SectionTitle>Two ways we can help — you pick</SectionTitle>
+      <SectionTitle>Two ways we can help — you choose</SectionTitle>
       <p className="mx-auto mb-8 max-w-2xl text-center text-ink-soft">
-        {site.principal.firstName} is a licensed NJ agent who buys houses
-        directly. That means you get <strong>both numbers</strong> on the same
-        call — no pressure toward either one.
+        {site.principal.firstName} is a licensed NJ real estate agent who also
+        buys homes directly. You'll see both options side by side so you can
+        choose what makes the most sense for you.
       </p>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="rounded-2xl border border-line bg-cream p-6">
-          <p className="mb-2 text-sm font-bold uppercase tracking-wide text-accent">
-            Option 1 · Cash offer
+          <p className="mb-1 text-sm font-bold uppercase tracking-wide text-accent">
+            Option 1 · Sell for cash
+          </p>
+          <p className="mb-3 text-sm font-medium text-ink">
+            Best for speed, convenience, and certainty
           </p>
           <ul className="space-y-2 text-sm text-ink-soft">
-            <li>Close in as little as 2–3 weeks — or on your date</li>
-            <li>Truly as-is: no repairs, no cleanout, no showings</li>
-            <li>No commissions or fees; typical closing costs covered</li>
-            <li>Proof of funds with every written offer</li>
+            <li>Sell completely as-is</li>
+            <li>No repairs, cleanout, or showings</li>
+            <li>Close in as little as 2–3 weeks, or choose your date</li>
+            <li>No agent commission on the cash sale</li>
+            <li>Typical seller closing costs covered</li>
+            <li>Written offer with proof of funds</li>
           </ul>
         </div>
         <div className="rounded-2xl border border-line bg-cream p-6">
-          <p className="mb-2 text-sm font-bold uppercase tracking-wide text-trust">
-            Option 2 · List it
+          <p className="mb-1 text-sm font-bold uppercase tracking-wide text-trust">
+            Option 2 · List your home
+          </p>
+          <p className="mb-3 text-sm font-medium text-ink">
+            Best when maximizing your net proceeds matters most
           </p>
           <ul className="space-y-2 text-sm text-ink-soft">
-            <li>When the math says listing nets you more, we say so</li>
-            <li>Full licensed listing service, honest pricing</li>
-            <li>Standard commission — shown next to the cash number</li>
-            <li>You compare both, in writing, before deciding anything</li>
+            <li>Full-service NJ listing representation</li>
+            <li>Honest pricing based on current market conditions</li>
+            <li>Commission and estimated selling costs clearly shown</li>
+            <li>Your expected listing proceeds shown beside the cash offer</li>
+            <li>If listing looks like the better financial option, we'll tell you</li>
+            <li>No obligation to choose either route</li>
           </ul>
         </div>
       </div>
+      <p className="mt-8 text-center text-lg font-bold tracking-tight">
+        One conversation. Two numbers. You decide.
+      </p>
     </Section>
   );
 }
