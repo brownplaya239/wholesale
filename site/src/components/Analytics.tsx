@@ -7,23 +7,28 @@ import Script from "next/script";
  */
 export default function Analytics() {
   const ga4 = process.env.NEXT_PUBLIC_GA4_ID;
+  const gadsId = process.env.NEXT_PUBLIC_GADS_ID; // AW-… account tag
   const clarity = process.env.NEXT_PUBLIC_CLARITY_ID;
   const callrail = process.env.NEXT_PUBLIC_CALLRAIL_SRC;
 
+  // One gtag.js loader serves both GA4 and Google Ads; config each present id.
+  const gtagLoaderId = ga4 || gadsId;
+
   return (
     <>
-      {ga4 && (
+      {gtagLoaderId && (
         <>
           <Script
-            src={`https://www.googletagmanager.com/gtag/js?id=${ga4}`}
+            src={`https://www.googletagmanager.com/gtag/js?id=${gtagLoaderId}`}
             strategy="afterInteractive"
           />
-          <Script id="ga4-init" strategy="afterInteractive">
+          <Script id="gtag-init" strategy="afterInteractive">
             {`window.dataLayer = window.dataLayer || [];
               function gtag(){dataLayer.push(arguments);}
               window.gtag = gtag;
               gtag('js', new Date());
-              gtag('config', '${ga4}');`}
+              ${ga4 ? `gtag('config', '${ga4}');` : ""}
+              ${gadsId ? `gtag('config', '${gadsId}');` : ""}`}
           </Script>
         </>
       )}
