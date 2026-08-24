@@ -21,8 +21,7 @@ export const site = {
     licenseLine: "NJ Licensed Real Estate Salesperson",
     licenseNumber: "2082408",
     brokerage: "Coldwell Banker Realty",
-    // TODO: add a real photo as site/public/sum.jpg and change this to "/sum.jpg"
-    photo: "/sum-placeholder.svg",
+    photo: "/sum.jpg",
     base: "Based in Monmouth County",
   },
 

@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import PhoneLink from "@/components/PhoneLink";
 import { entityName, site } from "@/config/site";
@@ -54,6 +55,14 @@ export default function Footer({ minimal = false }: { minimal?: boolean }) {
         )}
 
         <div className="space-y-1.5 border-t border-line pt-6 text-center text-xs leading-relaxed text-ink-soft">
+          {/* next/image so Vercel serves a small optimized version, not the 1254px source */}
+          <Image
+            src="/logo.png"
+            alt={`${site.name} logo`}
+            width={96}
+            height={96}
+            className="mx-auto mb-2 h-24 w-24"
+          />
           <p className="font-semibold text-ink">{entityName()}</p>
           {site.legal.officeAddress && <p>{site.legal.officeAddress}</p>}
           <p>
