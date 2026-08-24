@@ -250,7 +250,7 @@ export default function LeadForm({ idPrefix = "lead" }: { idPrefix?: string }) {
           </button>
           <p className="mt-2.5 text-center text-xs text-ink-soft">
             {site.principal.firstName} personally reviews every request —
-            expect a call within 15 minutes ({site.phone.hours}).
+            expect a call or text the same day ({site.phone.hours}).
           </p>
         </form>
       )}

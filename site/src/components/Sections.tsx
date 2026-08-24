@@ -163,7 +163,7 @@ export function ProcessSteps() {
       d: "30 seconds online, or one phone call. No obligation, and your info stays with us.",
     },
     {
-      t: "Get both numbers within 24 hours",
+      t: "Get both numbers — typically within 24 hours",
       d: "A written cash offer with proof of funds — and what we think listing would net you instead. Compare honestly.",
     },
     {

@@ -20,6 +20,19 @@ let scriptRequested = false;
 function loadPlaces(onReady: () => void) {
   const key = process.env.NEXT_PUBLIC_GOOGLE_PLACES_KEY;
   if (!key) return;
+  // If Google's auth fails (billing/API/referrer misconfig) it appends a
+  // blocking "This page can't load Google Maps correctly" dialog over the
+  // page. Strip it — the form must never be covered by a Google error.
+  (window as any).gm_authFailure = () => {
+    document.querySelectorAll("body > div").forEach((el) => {
+      if (
+        el.textContent?.includes("can't load Google Maps correctly") ||
+        el.textContent?.includes("Do you own this website?")
+      ) {
+        el.remove();
+      }
+    });
+  };
   if (window.google?.maps?.places) {
     onReady();
     return;
