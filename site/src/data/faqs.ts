@@ -8,7 +8,7 @@ export type Faq = { q: string; a: string };
 export const mainFaqs: Faq[] = [
   {
     q: "Do you charge any fees or commissions?",
-    a: "No. A cash sale to us has no commissions, no fees, and we pay typical seller closing costs. If instead we list your house (when that nets you more), normal listing commission applies — and we'll show you that math before you choose.",
+    a: "No. A cash sale to us has no commissions, no fees, and we pay typical seller closing costs. If instead you choose to list, brokerage compensation is separately agreed and fully negotiable — and it's shown clearly in your net estimate before you decide anything.",
   },
   {
     q: "How fast can you close?",
@@ -24,7 +24,7 @@ export const mainFaqs: Faq[] = [
   },
   {
     q: "What if the house has tenants?",
-    a: "We buy occupied properties — paying tenants, non-paying tenants, even mid-eviction. NJ tenant obligations transfer to us at closing.",
+    a: "We can buy occupied properties — paying tenants, non-paying tenants, even mid-eviction — and we coordinate the transfer of leases, deposits, and applicable landlord obligations at closing.",
   },
   {
     q: "Is your offer negotiable?",

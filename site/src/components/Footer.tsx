@@ -47,8 +47,9 @@ export default function Footer({ minimal = false }: { minimal?: boolean }) {
               <p className="mb-2.5 text-sm font-bold">Company</p>
               <ul className="space-y-1.5 text-sm text-ink-soft">
                 <li><Link href="/how-it-works" className="hover:text-ink hover:underline">How it works</Link></li>
-                <li><Link href="/reviews" className="hover:text-ink hover:underline">Reviews</Link></li>
+                <li><Link href="/reviews" className="hover:text-ink hover:underline">Verify us</Link></li>
                 <li><Link href="/about" className="hover:text-ink hover:underline">About {site.principal.firstName}</Link></li>
+                <li><Link href="/got-a-letter" className="hover:text-ink hover:underline">Did you get a letter from us?</Link></li>
               </ul>
             </div>
           </div>
@@ -77,9 +78,10 @@ export default function Footer({ minimal = false }: { minimal?: boolean }) {
             {site.principal.brokerage && ` · ${site.principal.brokerage}`}
           </p>
           <p>
-            We buy houses directly and, where it serves you better, offer
-            licensed listing services. All offers are made in writing with
-            proof of funds; NJ contracts are attorney-reviewed.
+            {entityName()} buys houses directly as principal. Brokerage
+            services, when requested, are provided separately through{" "}
+            {site.principal.brokerage}. All cash offers are made in writing
+            with proof of funds, on attorney-reviewed NJ contracts.
           </p>
           <p className="pt-1.5">
             © {new Date().getFullYear()} {entityName()} ·{" "}

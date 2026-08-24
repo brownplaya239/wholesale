@@ -39,7 +39,7 @@ export async function generateMetadata({
   if (county) {
     return {
       title: `Sell Your House Fast in ${county.name}, NJ`,
-      description: `Fair cash offer within 24 hours on your ${county.name} house — ${county.towns.slice(0, 4).join(", ")} and beyond. No fees, no repairs. Licensed local agent.`,
+      description: `Written cash offer, typically within 24 hours, on your ${county.name} house — ${county.towns.slice(0, 4).join(", ")} and beyond. No fees, no repairs. Licensed local agent.`,
     };
   }
   const situation = getSituation(slug);

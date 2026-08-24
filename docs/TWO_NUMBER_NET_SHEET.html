@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HouseSoldNJ Two-Number Net Sheet</title>
+<!--
+  Per-deal offer presentation sheet. Open in a browser, click any ____ blank
+  to type the deal's numbers (fields are editable in place), then File > Print
+  (or Cmd/Ctrl+P) > Save as PDF. Bring it to every seller conversation.
+-->
+<style>
+  :root {
+    --ink: #1c2b39; --soft: #51616f; --line: #d8d2c4;
+    --cream: #faf9f6; --accent: #b45309; --trust: #15803d;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+    color: var(--ink); background: #fff; max-width: 7.6in; margin: 0 auto;
+    padding: .55in .5in; font-size: 13px; line-height: 1.45;
+  }
+  @media print { body { padding: .2in 0; } .noprint { display: none; } }
+  header { display: flex; justify-content: space-between; align-items: baseline;
+    border-bottom: 3px solid var(--ink); padding-bottom: 10px; }
+  .brand { font-size: 20px; font-weight: 800; }
+  .brand .mid { color: var(--accent); }
+  .meta { text-align: right; font-size: 11px; color: var(--soft); }
+  h1 { font-size: 17px; margin: 14px 0 2px; }
+  .sub { color: var(--soft); font-size: 12px; margin-bottom: 12px; }
+  [contenteditable] {
+    display: inline-block; min-width: 90px; border-bottom: 1.5px solid var(--accent);
+    padding: 0 4px; font-weight: 600; outline: none;
+  }
+  [contenteditable]:empty::before { content: "____________"; color: #b9b2a3; font-weight: 400; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  th, td { padding: 7px 9px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+  th { background: var(--cream); font-size: 12px; }
+  th.col { width: 26%; text-align: center; }
+  td.num { text-align: center; font-variant-numeric: tabular-nums; }
+  tr.total td { background: var(--cream); font-weight: 800; font-size: 14px; }
+  .convenience { margin-top: 12px; border: 2px solid var(--accent); border-radius: 8px;
+    padding: 10px 14px; background: #fdf6ee; }
+  .convenience b { font-size: 14px; }
+  .footnotes { margin-top: 14px; font-size: 10px; color: var(--soft); line-height: 1.5; }
+  .sig { margin-top: 18px; display: flex; gap: 40px; font-size: 11px; color: var(--soft); }
+  .sig div { flex: 1; border-top: 1px solid var(--ink); padding-top: 4px; }
+  .noprint { background: var(--cream); border: 1px dashed var(--line); border-radius: 8px;
+    padding: 8px 12px; margin-bottom: 14px; font-size: 11px; color: var(--soft); }
+</style>
+</head>
+<body>
+  <p class="noprint">Click any blank to type. Print / save as PDF when done. Delete this box? It disappears automatically when printing.</p>
+
+  <header>
+    <div class="brand">House<span class="mid">Sold</span>NJ</div>
+    <div class="meta">
+      Sumeet Sancheti · NJ Licensed Real Estate Salesperson · License #2082408<br>
+      Coldwell Banker Realty · (908) 596-0242 · sum@housesoldnj.com
+    </div>
+  </header>
+
+  <h1>Your Two Numbers</h1>
+  <p class="sub">
+    Property: <span contenteditable></span> &nbsp;·&nbsp;
+    Prepared for: <span contenteditable></span> &nbsp;·&nbsp;
+    Date: <span contenteditable></span>
+  </p>
+
+  <table>
+    <tr>
+      <th></th>
+      <th class="col">Cash Sale<br><small>to House Sold NJ</small></th>
+      <th class="col">Market Listing<br><small>via Coldwell Banker Realty</small></th>
+    </tr>
+    <tr><td>Estimated market / retail price</td><td class="num">—</td><td class="num"><span contenteditable></span></td></tr>
+    <tr><td>House Sold NJ purchase price</td><td class="num"><span contenteditable></span></td><td class="num">—</td></tr>
+    <tr><td>Repairs before sale</td><td class="num">$0</td><td class="num"><span contenteditable></span></td></tr>
+    <tr><td>Buyer-requested repairs / concessions</td><td class="num">$0</td><td class="num"><span contenteditable>est.</span></td></tr>
+    <tr><td>Brokerage compensation¹</td><td class="num">$0</td><td class="num"><span contenteditable>est.</span></td></tr>
+    <tr><td>Seller closing costs</td><td class="num"><span contenteditable>covered</span></td><td class="num"><span contenteditable>est.</span></td></tr>
+    <tr><td>Carrying costs until sold (taxes, insurance, utilities)</td><td class="num">$0 after close</td><td class="num"><span contenteditable>est.</span></td></tr>
+    <tr><td>Estimated timeline</td><td class="num"><span contenteditable>~21 days</span></td><td class="num"><span contenteditable>60–120 days</span></td></tr>
+    <tr class="total"><td>Estimated seller proceeds</td><td class="num"><span contenteditable></span></td><td class="num"><span contenteditable></span></td></tr>
+  </table>
+
+  <div class="convenience">
+    <b>Cash convenience cost: <span contenteditable></span></b><br>
+    <small>What you'd give up financially in exchange for no repairs, no showings,
+    no financing contingency, and a fast, certain close. If the listing number
+    is worth the time and uncertainty to you — take the listing path. We'll say
+    so ourselves when it is.</small>
+  </div>
+
+  <div class="footnotes">
+    ¹ Brokerage compensation is separately agreed and fully negotiable; it is not set by law.<br>
+    In a cash purchase, House Sold NJ acts as the buyer for its own account — not as your real
+    estate agent. If you choose to list, brokerage services are provided separately through
+    Coldwell Banker Realty under a written brokerage agreement. All figures on this sheet are
+    good-faith estimates, not guarantees; actual proceeds depend on final contract terms,
+    title, and closing figures. Cash offers are accompanied by proof of funds and an
+    attorney-reviewed New Jersey contract. We encourage you to review any offer with your own
+    attorney.
+  </div>
+
+  <div class="sig">
+    <div>Prepared by</div>
+    <div>Received by (optional)</div>
+  </div>
+</body>
+</html>

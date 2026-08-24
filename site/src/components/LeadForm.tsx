@@ -23,6 +23,13 @@ import type { LeadSubmission } from "@/lib/lead";
 
 const TIMELINES = ["ASAP", "1–3 months", "3+ months", "Just curious"];
 
+const PRIORITIES = [
+  "Speed & certainty",
+  "Highest net proceeds",
+  "No repairs or cleanup",
+  "Not sure — compare options",
+];
+
 function newLeadId(): string {
   try {
     return crypto.randomUUID();
@@ -40,6 +47,7 @@ export default function LeadForm({ idPrefix = "lead" }: { idPrefix?: string }) {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [timeline, setTimeline] = useState("");
+  const [priority, setPriority] = useState("");
   const [consent, setConsent] = useState(false); // unticked by design
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<"" | "fields" | "consent" | "delivery">("");
@@ -96,6 +104,7 @@ export default function LeadForm({ idPrefix = "lead" }: { idPrefix?: string }) {
         phone: phone.trim(),
         email: email.trim(),
         timeline,
+        priority,
         consentChecked: consent,
         consentText: CONSENT_TEXT,
         pageUrl: window.location.href,
@@ -145,7 +154,8 @@ export default function LeadForm({ idPrefix = "lead" }: { idPrefix?: string }) {
             Get My Fair Cash Offer →
           </button>
           <p className="mt-2.5 text-center text-xs text-ink-soft">
-            Takes 30 seconds · No obligation · We never share your info
+            Takes 30 seconds · No obligation · Never sold or sent to other
+            investors
           </p>
         </form>
       ) : (
@@ -205,6 +215,28 @@ export default function LeadForm({ idPrefix = "lead" }: { idPrefix?: string }) {
                     }`}
                   >
                     {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-semibold text-ink">
+                What matters most to you?{" "}
+                <span className="font-normal text-ink-soft">(optional)</span>
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {PRIORITIES.map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setPriority(priority === p ? "" : p)}
+                    className={`rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
+                      priority === p
+                        ? "border-accent bg-accent/10 text-accent"
+                        : "border-line bg-white text-ink-soft hover:border-ink-soft"
+                    }`}
+                  >
+                    {p}
                   </button>
                 ))}
               </div>

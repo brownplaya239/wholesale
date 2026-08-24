@@ -129,6 +129,7 @@ export async function POST(req: NextRequest) {
     phone,
     email: clean(body.email, 200),
     timeline: clean(body.timeline, 40),
+    priority: clean(body.priority, 60),
     consent: {
       checked: body.consentChecked === true,
       text: clean(body.consentText, 500),
@@ -151,6 +152,7 @@ export async function POST(req: NextRequest) {
     payload.phone && `Phone: ${payload.phone}`,
     payload.email && `Email: ${payload.email}`,
     payload.timeline && `Timeline: ${payload.timeline}`,
+    payload.priority && `Priority: ${payload.priority}`,
     `Consent to call/text: ${payload.consent.checked ? "YES" : "no"} @ ${payload.consent.timestamp} (IP ${ip})`,
     `Page: ${payload.consent.pageUrl}`,
     `Lead ID: ${payload.leadId}`,

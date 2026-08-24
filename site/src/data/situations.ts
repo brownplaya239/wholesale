@@ -110,9 +110,9 @@ export const situations: Situation[] = [
     headline: "Stop a New Jersey Foreclosure by Selling Your House",
     lpHeadline: "Stop Foreclosure in {geo} — Sell Fast, Keep Your Equity",
     metaDescription:
-      "Behind on your NJ mortgage? How the foreclosure timeline works, why NJ's process gives you time to sell, and how a fast sale protects your equity.",
+      "Behind on your NJ mortgage? How the foreclosure timeline works, why NJ's judicial process moves slowly, and how a sale may protect your equity.",
     lead:
-      "Falling behind doesn't mean losing everything. New Jersey's foreclosure process is one of the slowest in the country — which means if you act, you almost always have time to sell, pay the loan off, and keep your equity instead of losing it at auction.",
+      "Falling behind doesn't mean losing everything. New Jersey's foreclosure process is one of the slowest in the country — and depending on where you are in it, a sale may still be possible: pay the loan off and keep your equity instead of risking it at auction.",
     njExplainer: [
       {
         heading: "NJ foreclosures are judicial — you have time",
@@ -120,14 +120,14 @@ export const situations: Situation[] = [
           "Every NJ foreclosure goes through court, and the process commonly takes a year or more from the first missed payments to a sheriff's sale. A Notice of Intention to Foreclose, a filed complaint, even a judgment — none of these mean it's over. Until the sheriff's sale is final, you can generally sell.",
       },
       {
-        heading: "Selling protects the equity a sheriff's sale burns",
+        heading: "Selling can protect equity an auction puts at risk",
         body:
-          "At auction, your house can go for far less than it's worth, and fees stack up the whole way. A private sale — cash to us, or listed — pays off the bank and puts the remaining equity in your pocket, not the process's.",
+          "At auction, your house can go for far less than it's worth, and fees stack up the whole way. A private sale — cash to us, or listed — can pay off the bank and put the remaining equity in your pocket instead.",
       },
       {
         heading: "We move at foreclosure speed",
         body:
-          "Proof of funds with the offer, attorney-reviewed contract, and closings in as little as two to three weeks. If a sheriff's sale date is close, NJ also allows adjournments — your attorney can often buy the extra weeks a sale needs.",
+          "Proof of funds with the offer, attorney-reviewed contract, and closings in as little as two to three weeks. We can coordinate a fast closing — whether the foreclosure itself can be stopped or postponed is determined by your attorney and your lender, and NJ's adjournment process often provides extra weeks.",
       },
       {
         heading: "If selling isn't the right answer, we'll say so",
@@ -138,7 +138,7 @@ export const situations: Situation[] = [
     faq: [
       {
         q: "I got a sheriff's sale date. Is it too late?",
-        a: "Usually not. NJ lets homeowners request adjournments of a sheriff's sale, and lenders often postpone when a real closing is scheduled. Call us — timing is everything at this stage.",
+        a: "Not necessarily. NJ lets homeowners request adjournments of a sheriff's sale, and lenders often postpone when a real closing is scheduled — but whether yours can be is fact-specific and runs through your attorney and lender. Call us; timing is everything at this stage.",
       },
       {
         q: "Will you talk to my lender?",
@@ -204,9 +204,9 @@ export const situations: Situation[] = [
           "NJ divides marital property by equitable distribution, and the house's value is where settlements stall. A written cash offer from a verifiable buyer — with proof of funds — gives both attorneys a hard number to work with, whether or not you take it.",
       },
       {
-        heading: "We work with both sides, neutrally",
+        heading: "We give both owners the same written numbers",
         body:
-          "We're happy to present the same numbers to both spouses and both attorneys, on the same call or separately. No side deals, no pressure — the offer is the offer.",
+          "We present the same offer and the same assumptions to both spouses and both attorneys — together or separately — and we encourage each party to review everything with independent counsel. The numbers don't change depending on who's asking.",
       },
       {
         heading: "Speed lowers the temperature",
@@ -238,7 +238,7 @@ export const situations: Situation[] = [
     metaDescription:
       "Major repairs, fire or water damage, hoarding, failed inspections, open permits — sell your NJ house as-is for cash. No cleanout, no contractors.",
     lead:
-      "Roof, foundation, mold, a kitchen from 1974, rooms you'd rather nobody photographed — houses like this get quietly turned away by agents and torn apart by retail buyers' inspection reports. It's the exact house we buy.",
+      "Roof, foundation, mold, a kitchen from 1974, rooms you'd rather nobody photographed — major repairs shrink the conventional buyer pool, create financing hurdles, and invite inspection renegotiations. It's the exact house we buy.",
     njExplainer: [
       {
         heading: "As-is means as-is",

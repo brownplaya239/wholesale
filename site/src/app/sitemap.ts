@@ -4,7 +4,7 @@ import { counties } from "@/data/counties";
 import { situations } from "@/data/situations";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const staticPaths = ["", "/how-it-works", "/about", "/reviews", "/privacy", "/terms"];
+  const staticPaths = ["", "/how-it-works", "/about", "/reviews", "/got-a-letter", "/privacy", "/terms"];
   const dataPaths = [
     ...counties.map((c) => `/${c.slug}`),
     ...situations.map((s) => `/${s.slug}`),

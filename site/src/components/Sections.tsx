@@ -76,6 +76,12 @@ export function HonestBroker() {
       <p className="mt-8 text-center text-lg font-bold tracking-tight">
         One conversation. Two numbers. You decide.
       </p>
+      <p className="mx-auto mt-4 max-w-2xl text-center text-xs leading-relaxed text-ink-soft">
+        In a cash purchase, {site.name} acts as the buyer for its own account —
+        not as your real estate agent. If you choose to list, brokerage
+        services are provided separately through {site.principal.brokerage}{" "}
+        under a written brokerage agreement.
+      </p>
     </Section>
   );
 }
@@ -89,8 +95,8 @@ export function OfferMath() {
     <Section>
       <SectionTitle>How we calculate your offer</SectionTitle>
       <p className="mx-auto mb-8 max-w-2xl text-center text-ink-soft">
-        No black box. Every offer is built from three numbers, and we show you
-        each one:
+        No black box. Every offer is built from the same simple math, and we
+        show you every line:
       </p>
       <div className="mx-auto max-w-xl space-y-3">
         {[
@@ -106,8 +112,13 @@ export function OfferMath() {
           },
           {
             n: "3",
-            t: "Minus our margin",
-            d: "We're a business and we're honest about it — our margin is on the sheet, not hidden in the price.",
+            t: "Minus transaction, holding, and risk costs",
+            d: "Closing costs on both ends, carrying costs during the work, and a cushion for surprises — itemized, not lumped.",
+          },
+          {
+            n: "4",
+            t: "Minus our return",
+            d: "We're a business and we're honest about it — the return we need is a line on the sheet, not hidden in the price.",
           },
         ].map((row) => (
           <div key={row.n} className="flex gap-4 rounded-xl border border-line bg-white p-4">

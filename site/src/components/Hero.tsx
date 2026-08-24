@@ -23,7 +23,7 @@ export default function Hero({
       </h1>
       <p className="mx-auto mt-4 max-w-2xl text-balance text-center text-lg text-ink-soft sm:text-xl">
         {subhead ??
-          "Fair cash offer within 24 hours. No fees, no repairs, no obligation. Or, if listing would net you more — we'll tell you honestly."}
+          "A written cash offer, typically within 24 hours. No fees, no repairs, no obligation. Or, if listing would net you more — we'll tell you honestly."}
       </p>
       <div id="top-form" className="mx-auto mt-7 max-w-xl scroll-mt-4" data-lead-form-anchor>
         <LeadForm idPrefix={idPrefix} />

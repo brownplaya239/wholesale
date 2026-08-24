@@ -10,7 +10,7 @@ export const metadata: Metadata = {
     template: `%s | ${site.name}`,
   },
   description:
-    "Fair cash offer on your NJ house within 24 hours from a licensed local agent. No fees, no repairs, no obligation — and if listing would net you more, we'll tell you honestly.",
+    "A written cash offer on your NJ house, typically within 24 hours, from a licensed local agent. No fees, no repairs, no obligation — and if listing would net you more, we'll tell you honestly.",
 };
 
 export const viewport: Viewport = {

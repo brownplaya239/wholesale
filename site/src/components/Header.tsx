@@ -8,7 +8,7 @@ import { site } from "@/config/site";
  */
 const nav = [
   { href: "/how-it-works", label: "How It Works" },
-  { href: "/reviews", label: "Reviews" },
+  { href: "/reviews", label: "Verify Us" },
   { href: "/about", label: "About" },
 ];
 

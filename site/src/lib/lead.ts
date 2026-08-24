@@ -15,6 +15,8 @@ export type LeadSubmission = {
   phone?: string;
   email?: string;
   timeline?: string;
+  /** Optional routing signal: what the seller says matters most. */
+  priority?: string;
   consentChecked?: boolean;
   /** Exact consent copy the user saw — stored per-lead (provable artifact). */
   consentText?: string;
