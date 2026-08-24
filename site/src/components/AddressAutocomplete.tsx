@@ -56,19 +56,26 @@ export default function AddressAutocomplete({
 
   useEffect(() => {
     loadPlaces(() => {
-      if (attached.current || !inputRef.current || !window.google) return;
-      attached.current = true;
-      const ac = new window.google.maps.places.Autocomplete(inputRef.current, {
-        types: ["address"],
-        componentRestrictions: { country: "us" },
-        fields: ["formatted_address", "place_id"],
-      });
-      ac.addListener("place_changed", () => {
-        const place = ac.getPlace();
-        if (place?.formatted_address) {
-          onSelect(place.formatted_address, place.place_id ?? "");
-        }
-      });
+      // Any Google-side failure (API not enabled, key restriction, quota)
+      // must degrade to the plain input — never touch the form itself.
+      try {
+        if (attached.current || !inputRef.current || !window.google?.maps?.places?.Autocomplete)
+          return;
+        attached.current = true;
+        const ac = new window.google.maps.places.Autocomplete(inputRef.current, {
+          types: ["address"],
+          componentRestrictions: { country: "us" },
+          fields: ["formatted_address", "place_id"],
+        });
+        ac.addListener("place_changed", () => {
+          const place = ac.getPlace();
+          if (place?.formatted_address) {
+            onSelect(place.formatted_address, place.place_id ?? "");
+          }
+        });
+      } catch {
+        // Autocomplete unavailable — plain input keeps working.
+      }
     });
     // onSelect is stable in our usage; attach once.
     // eslint-disable-next-line react-hooks/exhaustive-deps

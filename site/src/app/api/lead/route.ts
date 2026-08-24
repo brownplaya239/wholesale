@@ -63,7 +63,11 @@ async function sendEmail(
       }),
       signal: AbortSignal.timeout(8000),
     });
-    return { channel: "email", ok: res.ok, detail: `HTTP ${res.status}` };
+    // Surface the provider's error body — "HTTP 400" alone is undebuggable.
+    const detail = res.ok
+      ? `HTTP ${res.status}`
+      : `HTTP ${res.status} ${(await res.text()).slice(0, 300)}`;
+    return { channel: "email", ok: res.ok, detail };
   } catch (err) {
     return { channel: "email", ok: false, detail: String(err) };
   }
