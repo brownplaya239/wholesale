@@ -108,7 +108,7 @@ export const counties: County[] = [
       "Trenton", "Hamilton", "Ewing", "Lawrence", "Hightstown",
     ],
     intro:
-      "From Trenton rowhomes to Hamilton split-levels, we make fair cash offers across Mercer County — and if listing would genuinely net you more, we'll say so.",
+      "From Trenton rowhomes to Hamilton split-levels, we make written cash offers across Mercer County — and if listing would genuinely net you more, we'll say so.",
   },
 ];
 

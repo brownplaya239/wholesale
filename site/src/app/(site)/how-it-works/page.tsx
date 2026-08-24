@@ -13,7 +13,7 @@ import { mainFaqs } from "@/data/faqs";
 export const metadata: Metadata = {
   title: "How It Works",
   description:
-    "How selling your NJ house to us works: one call, both numbers (cash offer AND likely listing net) within 24 hours, close on your timeline. No fees, no repairs.",
+    "How selling your NJ house to us works: one conversation, both numbers (cash offer AND estimated listing net), typically within 24 hours. Close on your timeline.",
 };
 
 export default function HowItWorksPage() {

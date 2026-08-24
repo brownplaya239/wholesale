@@ -1,3 +1,4 @@
+import LicensureNote from "@/components/Licensure";
 import { site } from "@/config/site";
 
 /**
@@ -47,6 +48,9 @@ export default function TrustStrip() {
   return (
     <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm text-ink-soft">
       {items}
+      <span className="w-full text-center">
+        <LicensureNote />
+      </span>
     </div>
   );
 }

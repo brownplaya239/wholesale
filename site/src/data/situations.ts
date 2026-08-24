@@ -194,7 +194,7 @@ export const situations: Situation[] = [
     headline: "Selling a House During a Divorce in New Jersey",
     lpHeadline: "Sell the House in Your {geo} Divorce — Fast and Neutral",
     metaDescription:
-      "Selling the marital home in an NJ divorce — neutral, fast, and fair to both sides. Cash offer or honest listing advice, either way with real numbers.",
+      "Selling the marital home in an NJ divorce — the same written numbers for both owners. Cash offer or honest listing comparison, documented either way.",
     lead:
       "The house is usually the biggest asset on the table and the last thing either of you wants to keep negotiating over. A clean, documented sale — at a number both attorneys can verify — is often what finally lets everyone move forward.",
     njExplainer: [

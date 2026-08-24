@@ -28,7 +28,7 @@ export const mainFaqs: Faq[] = [
   },
   {
     q: "Is your offer negotiable?",
-    a: "Yes. It's a starting point built from real numbers — market value, repair budget, our margin — and we'll show you each piece. If you think a number is off, tell us why and we'll look again.",
+    a: "Yes. It's a starting point built from real numbers — market value, repair budget, costs, and our return — and we'll show you each piece. If you think a number is off, tell us why and we'll look again.",
   },
   {
     q: "Are you agents or investors?",

@@ -1,3 +1,4 @@
+import LicensureNote from "@/components/Licensure";
 import PhoneLink from "@/components/PhoneLink";
 import { site } from "@/config/site";
 
@@ -80,7 +81,7 @@ export function HonestBroker() {
         In a cash purchase, {site.name} acts as the buyer for its own account —
         not as your real estate agent. If you choose to list, brokerage
         services are provided separately through {site.principal.brokerage}{" "}
-        under a written brokerage agreement.
+        under a written brokerage agreement. <LicensureNote />
       </p>
     </Section>
   );
@@ -160,6 +161,9 @@ export function AboutSum({ compact = false }: { compact?: boolean }) {
         <p className="text-sm font-medium text-trust">
           {site.principal.licenseLine}
           {site.principal.brokerage && ` · ${site.principal.brokerage}`}
+        </p>
+        <p>
+          <LicensureNote />
         </p>
         <p className="text-sm text-ink-soft">{site.principal.base}</p>
         {!compact && (

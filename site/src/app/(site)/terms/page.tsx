@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import LicensureNote from "@/components/Licensure";
 import { Section } from "@/components/Sections";
 import { entityName, site } from "@/config/site";
 
@@ -40,7 +41,7 @@ export default function TermsPage() {
           {site.principal.brokerage && <> with {site.principal.brokerage}</>}
           {site.principal.licenseNumber && <> (License #{site.principal.licenseNumber})</>}
           , and may purchase property as a principal. License status is
-          disclosed at first contact and in any contract.
+          disclosed at first contact and in any contract. <LicensureNote />
         </p>
 
         <h2 className="text-lg font-bold text-ink">Accuracy</h2>

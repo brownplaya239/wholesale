@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import LicensureNote from "@/components/Licensure";
 import PhoneLink from "@/components/PhoneLink";
 import { entityName, site } from "@/config/site";
 import { counties } from "@/data/counties";
@@ -65,7 +66,22 @@ export default function Footer({ minimal = false }: { minimal?: boolean }) {
             className="mx-auto mb-2 h-24 w-24"
           />
           <p className="font-semibold text-ink">{entityName()}</p>
-          {site.legal.officeAddress && <p>{site.legal.officeAddress}</p>}
+          {site.principal.brokerage && (
+            <p className="text-sm font-bold text-ink">
+              {site.principal.brokerage}
+            </p>
+          )}
+          {site.legal.officeAddress && (
+            <p>
+              {site.legal.officeAddress
+                .replace(/^Coldwell Banker Realty — /, "")
+                .replace(/ · Office.*$/, "")}{" "}
+              · Office{" "}
+              <a href="tel:+17324624242" className="hover:underline">
+                (732) 462-4242
+              </a>
+            </p>
+          )}
           <p>
             <PhoneLink className="hover:underline" /> ·{" "}
             <a href={`mailto:${site.email}`} className="hover:underline">
@@ -76,6 +92,8 @@ export default function Footer({ minimal = false }: { minimal?: boolean }) {
             {site.principal.fullName}, {site.principal.licenseLine}
             {site.principal.licenseNumber && ` · License #${site.principal.licenseNumber}`}
             {site.principal.brokerage && ` · ${site.principal.brokerage}`}
+            <br />
+            <LicensureNote />
           </p>
           <p>
             {entityName()} buys houses directly as principal. Brokerage

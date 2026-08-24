@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import LeadForm from "@/components/LeadForm";
+import LicensureNote from "@/components/Licensure";
 import PhoneLink from "@/components/PhoneLink";
 import { AboutSum, HonestBroker, Section, SectionTitle } from "@/components/Sections";
 import { entityName, site } from "@/config/site";
@@ -62,7 +63,8 @@ export default function GotALetterPage() {
               <Link href="/reviews" className="font-semibold text-ink underline">
                 Verify Us
               </Link>{" "}
-              page — it links to the state's own license database.
+              page — it links to the state's own license database.{" "}
+              <LicensureNote />
             </p>
           </div>
           <div className="rounded-2xl border border-line bg-white p-5">

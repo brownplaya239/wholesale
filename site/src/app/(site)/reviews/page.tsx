@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import LeadForm from "@/components/LeadForm";
+import LicensureNote from "@/components/Licensure";
 import PhoneLink from "@/components/PhoneLink";
 import { Section, SectionTitle } from "@/components/Sections";
 import { site } from "@/config/site";
@@ -62,7 +63,8 @@ export default function VerifyPage() {
               >
                 newjersey.mylicense.com/verification
               </a>
-              . That's the state's database — we can't touch it.
+              . That's the state's database — we can't touch it.{" "}
+              <LicensureNote />
             </p>
           </div>
           <div className="rounded-2xl border border-line bg-white p-5">
