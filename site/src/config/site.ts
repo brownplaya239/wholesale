@@ -22,7 +22,7 @@ export const site = {
     licenseNumber: "2082408",
     brokerage: "Coldwell Banker Realty",
     photo: "/sum.jpg",
-    base: "Based in Monmouth County",
+    base: "Local New Jersey buyer",
   },
 
   // ── Contact ────────────────────────────────────────────────────────────────

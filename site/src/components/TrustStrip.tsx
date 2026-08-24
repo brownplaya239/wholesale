@@ -32,7 +32,7 @@ export default function TrustStrip() {
       <Check /> {site.principal.licenseLine}
     </span>,
     <span key="local" className="flex items-center gap-1.5">
-      <Check /> Local — {site.principal.base.replace("Based in ", "based in ")}
+      <Check /> {site.principal.base}
     </span>
   );
 
