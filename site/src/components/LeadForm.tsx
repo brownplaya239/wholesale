@@ -52,6 +52,9 @@ export default function LeadForm({ idPrefix = "lead" }: { idPrefix?: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<"" | "fields" | "consent" | "delivery">("");
   const leadId = useRef(newLeadId());
+  // Resend id of the scheduled partial email — sent with the full submit so
+  // the server cancels it and a completed lead produces ONE email.
+  const scheduledEmailId = useRef("");
 
   const post = useCallback(async (body: LeadSubmission) => {
     const res = await fetch("/api/lead", {
@@ -60,6 +63,7 @@ export default function LeadForm({ idPrefix = "lead" }: { idPrefix?: string }) {
       body: JSON.stringify(body),
     });
     if (!res.ok) throw new Error(`lead post failed: ${res.status}`);
+    return (await res.json().catch(() => ({}))) as { scheduledEmailId?: string };
   }, []);
 
   function handleStep1(e: React.FormEvent) {
@@ -79,7 +83,11 @@ export default function LeadForm({ idPrefix = "lead" }: { idPrefix?: string }) {
       address: address.trim(),
       placeId,
       pageUrl: window.location.href,
-    }).catch(() => {});
+    })
+      .then((r) => {
+        if (r.scheduledEmailId) scheduledEmailId.current = r.scheduledEmailId;
+      })
+      .catch(() => {});
   }
 
   async function handleStep2(e: React.FormEvent) {
@@ -108,6 +116,7 @@ export default function LeadForm({ idPrefix = "lead" }: { idPrefix?: string }) {
         consentChecked: consent,
         consentText: CONSENT_TEXT,
         pageUrl: window.location.href,
+        cancelEmailId: scheduledEmailId.current || undefined,
       });
       trackEvent("lead_submit", { page: window.location.pathname });
       router.push("/thank-you");

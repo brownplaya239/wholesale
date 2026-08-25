@@ -22,4 +22,10 @@ export type LeadSubmission = {
   consentText?: string;
   /** Full URL of the page the form was on, incl. campaign params. */
   pageUrl: string;
+  /**
+   * Resend id of the scheduled partial-lead email (returned by the step1
+   * call). Sent with the full submission so the server can cancel it —
+   * completed leads then produce ONE email instead of partial + full.
+   */
+  cancelEmailId?: string;
 };
