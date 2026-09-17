@@ -183,13 +183,15 @@ export async function POST(req: NextRequest) {
     .filter(Boolean)
     .join("\n");
 
-  // Partial-lead emails are scheduled 10 minutes out; completing step 2
+  // Partial-lead emails are scheduled 30 minutes out; completing step 2
   // cancels them, so a finished lead produces ONE email. Abandoners still
   // get captured — their partial simply arrives after the grace window.
+  // (30 min, not 10: real sellers deliberating on step 2 at 2 AM blew past
+  // the old window and produced partial+full pairs anyway.)
   // Webhook + Slack stay immediate for both stages (pipeline feed).
   const emailScheduledAt =
     stage === "step1"
-      ? new Date(Date.now() + 10 * 60 * 1000).toISOString()
+      ? new Date(Date.now() + 30 * 60 * 1000).toISOString()
       : undefined;
   if (stage === "full" && typeof body.cancelEmailId === "string") {
     await cancelScheduledEmail(body.cancelEmailId);
