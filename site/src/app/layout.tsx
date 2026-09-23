@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Analytics as VercelAnalytics } from "@vercel/analytics/next";
 import Analytics from "@/components/Analytics";
 import { site } from "@/config/site";
 import "./globals.css";
@@ -45,6 +46,7 @@ export default function RootLayout({
       <body>
         {children}
         <Analytics />
+        <VercelAnalytics />
       </body>
     </html>
   );
