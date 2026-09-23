@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import PhoneLink from "@/components/PhoneLink";
 import { Section } from "@/components/Sections";
 import { site } from "@/config/site";
+import LeadDetails from "./LeadDetails";
 import ThankYouTracking from "./ThankYouTracking";
 
 export const metadata: Metadata = {
@@ -31,6 +32,7 @@ export default function ThankYouPage() {
           <p className="mt-3 text-sm font-medium text-trust">
             Your property information has been received successfully.
           </p>
+          <LeadDetails />
           <div className="mt-8 space-y-4 text-left">
             <div className="rounded-2xl border border-line bg-white p-5">
               <p className="font-bold">

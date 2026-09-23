@@ -6,7 +6,7 @@ import AddressAutocomplete from "@/components/AddressAutocomplete";
 import PhoneLink from "@/components/PhoneLink";
 import { CONSENT_TEXT, site } from "@/config/site";
 import { trackEvent } from "@/lib/analytics";
-import type { LeadSubmission } from "@/lib/lead";
+import { rememberLead, type LeadSubmission } from "@/lib/lead";
 
 /**
  * The two-step form (spec §4).
@@ -15,20 +15,13 @@ import type { LeadSubmission } from "@/lib/lead";
  *         page reload. Nothing is sent to the server: an address with no
  *         contact info isn't a lead. The step-1 analytics event goes to GA4
  *         only, so Google Ads never optimizes toward address-only visitors.
- * Step 2: name, mobile, optional email, ONE qualifier, unticked consent box.
+ * Step 2: name, mobile, unticked consent box — nothing else. Timeline,
+ *         priority, and email are optional extras on /thank-you, asked only
+ *         after the lead is already captured.
  *
  * If every delivery channel fails server-side, we show the direct-call
  * fallback instead of a false "we got it".
  */
-
-const TIMELINES = ["ASAP", "1–3 months", "3+ months", "Just curious"];
-
-const PRIORITIES = [
-  "Speed & certainty",
-  "Highest net proceeds",
-  "No repairs or cleanup",
-  "Not sure — compare options",
-];
 
 function newLeadId(): string {
   try {
@@ -45,9 +38,6 @@ export default function LeadForm({ idPrefix = "lead" }: { idPrefix?: string }) {
   const [placeId, setPlaceId] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [timeline, setTimeline] = useState("");
-  const [priority, setPriority] = useState("");
   const [consent, setConsent] = useState(false); // unticked by design
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<"" | "fields" | "consent" | "delivery">("");
@@ -96,14 +86,16 @@ export default function LeadForm({ idPrefix = "lead" }: { idPrefix?: string }) {
         placeId,
         name: name.trim(),
         phone: phone.trim(),
-        email: email.trim(),
-        timeline,
-        priority,
         consentChecked: consent,
         consentText: CONSENT_TEXT,
         pageUrl: window.location.href,
       });
       trackEvent("lead_submit", { page: window.location.pathname });
+      rememberLead({
+        leadId: leadId.current,
+        name: name.trim(),
+        address: address.trim(),
+      });
       router.push("/thank-you");
     } catch {
       setSubmitting(false);
@@ -182,59 +174,6 @@ export default function LeadForm({ idPrefix = "lead" }: { idPrefix?: string }) {
               required
               aria-label="Mobile phone"
             />
-            <input
-              type="email"
-              autoComplete="email"
-              inputMode="email"
-              placeholder="Email (optional)"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className={inputCls}
-              aria-label="Email (optional)"
-            />
-            <div>
-              <label className="mb-1.5 block text-sm font-semibold text-ink">
-                When do you need to sell?
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                {TIMELINES.map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setTimeline(t)}
-                    className={`rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
-                      timeline === t
-                        ? "border-accent bg-accent/10 text-accent"
-                        : "border-line bg-white text-ink-soft hover:border-ink-soft"
-                    }`}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-sm font-semibold text-ink">
-                What matters most to you?{" "}
-                <span className="font-normal text-ink-soft">(optional)</span>
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                {PRIORITIES.map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => setPriority(priority === p ? "" : p)}
-                    className={`rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
-                      priority === p
-                        ? "border-accent bg-accent/10 text-accent"
-                        : "border-line bg-white text-ink-soft hover:border-ink-soft"
-                    }`}
-                  >
-                    {p}
-                  </button>
-                ))}
-              </div>
-            </div>
             <label className="flex cursor-pointer items-start gap-2.5 pt-1">
               <input
                 type="checkbox"

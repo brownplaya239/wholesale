@@ -87,6 +87,45 @@ async function sendSlack(text: string): Promise<Delivery | null> {
   }
 }
 
+/**
+ * Optional extras the seller volunteers on /thank-you after the lead is
+ * already delivered. Sent under the original lead's subject ("Re: …") so the
+ * inbox threads it with the lead email instead of starting a new conversation.
+ */
+async function handleDetails(body: Partial<LeadSubmission>) {
+  const leadId = clean(body.leadId, 64);
+  const timeline = clean(body.timeline, 40);
+  const priority = clean(body.priority, 60);
+  const email = clean(body.email, 200);
+  if (!leadId || (!timeline && !priority && !email)) {
+    return NextResponse.json({ ok: false, error: "nothing_to_add" }, { status: 400 });
+  }
+  const name = clean(body.name, 120);
+  const address = clean(body.address);
+  const subject = `Re: 🔥 LEAD: ${name} — ${address}`;
+  const text = [
+    `More from ${name || "this seller"} (added on the thank-you page):`,
+    timeline && `Timeline: ${timeline}`,
+    priority && `Priority: ${priority}`,
+    email && `Email: ${email}`,
+    `Lead ID: ${leadId}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const results = (
+    await Promise.all([
+      sendWebhook({ source: "housesoldnj.com", stage: "details", leadId, timeline, priority, email }),
+      sendEmail(subject, text),
+      sendSlack(text),
+    ])
+  ).filter((r): r is Delivery => r !== null);
+  for (const f of results.filter((r) => !r.ok)) {
+    console.error(`LEAD DETAILS DELIVERY FAILURE channel=${f.channel} detail=${f.detail} leadId=${leadId}`);
+  }
+  return NextResponse.json({ ok: results.some((r) => r.ok) || results.length === 0 });
+}
+
 export async function POST(req: NextRequest) {
   let body: Partial<LeadSubmission>;
   try {
@@ -100,6 +139,7 @@ export async function POST(req: NextRequest) {
   if (body.stage === "step1") {
     return NextResponse.json({ ok: true, delivered: 0 });
   }
+  if (body.stage === "details") return handleDetails(body);
   const stage = "full";
   const address = clean(body.address);
   if (address.length < 4) {
