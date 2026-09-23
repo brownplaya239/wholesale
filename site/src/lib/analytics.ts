@@ -5,7 +5,7 @@
  * to dataLayer, so events keep flowing if tag management changes later.
  *
  * Canonical events:
- *  - lead_step1_complete  (micro conversion — address captured)
+ *  - lead_step1_complete  (GA4 only — address typed; never an Ads conversion)
  *  - lead_submit          (primary conversion)
  *  - call_click           (tap on any tel: link)
  *  - thank_you_engaged    (10s+ on /thank-you)

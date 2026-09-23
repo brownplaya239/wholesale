@@ -41,11 +41,7 @@ async function sendWebhook(payload: object): Promise<Delivery | null> {
   }
 }
 
-async function sendEmail(
-  subject: string,
-  text: string,
-  scheduledAt?: string
-): Promise<(Delivery & { emailId?: string }) | null> {
+async function sendEmail(subject: string, text: string): Promise<Delivery | null> {
   const key = process.env.RESEND_API_KEY;
   const to = process.env.LEAD_ALERT_TO;
   if (!key || !to) return null;
@@ -61,38 +57,17 @@ async function sendEmail(
         to: to.split(",").map((s) => s.trim()),
         subject,
         text,
-        ...(scheduledAt ? { scheduled_at: scheduledAt } : {}),
       }),
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) {
       // Surface the provider's error body — "HTTP 400" alone is undebuggable.
       const detail = `HTTP ${res.status} ${(await res.text()).slice(0, 300)}`;
-      // A failed *scheduled* send falls back to an immediate one so a lead
-      // can never be lost to the scheduling feature.
-      if (scheduledAt) return sendEmail(subject, text);
       return { channel: "email", ok: false, detail };
     }
-    const bodyJson = (await res.json().catch(() => ({}))) as { id?: string };
-    return { channel: "email", ok: true, detail: `HTTP ${res.status}`, emailId: bodyJson.id };
+    return { channel: "email", ok: true, detail: `HTTP ${res.status}` };
   } catch (err) {
     return { channel: "email", ok: false, detail: String(err) };
-  }
-}
-
-/** Best-effort cancel of a scheduled Resend email (partial-lead dedupe). */
-async function cancelScheduledEmail(emailId: string): Promise<void> {
-  const key = process.env.RESEND_API_KEY;
-  if (!key || !/^[A-Za-z0-9-]{8,64}$/.test(emailId)) return;
-  try {
-    await fetch(`https://api.resend.com/emails/${emailId}/cancel`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${key}` },
-      signal: AbortSignal.timeout(5000),
-    });
-  } catch {
-    // Cancel failing just means the seller's partial email also arrives —
-    // harmless duplicate, never worth failing the request over.
   }
 }
 
@@ -120,20 +95,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "bad_json" }, { status: 400 });
   }
 
-  const stage = body.stage === "step1" ? "step1" : "full";
+  // Address-only partials carry no contact info — not a lead. Acknowledge
+  // quietly (old cached pages may still send them) and deliver nothing.
+  if (body.stage === "step1") {
+    return NextResponse.json({ ok: true, delivered: 0 });
+  }
+  const stage = "full";
   const address = clean(body.address);
   if (address.length < 4) {
     return NextResponse.json({ ok: false, error: "address_required" }, { status: 400 });
   }
 
   const phone = clean(body.phone, 30);
-  if (stage === "full") {
-    if (clean(body.name, 120).length < 2) {
-      return NextResponse.json({ ok: false, error: "name_required" }, { status: 400 });
-    }
-    if (phone.replace(/\D/g, "").length < 10) {
-      return NextResponse.json({ ok: false, error: "phone_required" }, { status: 400 });
-    }
+  if (clean(body.name, 120).length < 2) {
+    return NextResponse.json({ ok: false, error: "name_required" }, { status: 400 });
+  }
+  if (phone.replace(/\D/g, "").length < 10) {
+    return NextResponse.json({ ok: false, error: "phone_required" }, { status: 400 });
   }
 
   const ip =
@@ -143,7 +121,7 @@ export async function POST(req: NextRequest) {
 
   const payload = {
     source: "housesoldnj.com",
-    stage, // "step1" = address-only partial (still a lead — pipeline feed)
+    stage,
     leadId: clean(body.leadId, 64) || "unknown",
     receivedAt: new Date().toISOString(),
     address,
@@ -163,10 +141,7 @@ export async function POST(req: NextRequest) {
     },
   };
 
-  const subject =
-    stage === "full"
-      ? `🔥 LEAD: ${payload.name} — ${address}`
-      : `Partial lead (address only): ${address}`;
+  const subject = `🔥 LEAD: ${payload.name} — ${address}`;
   const text = [
     subject,
     `Stage: ${stage}`,
@@ -183,27 +158,13 @@ export async function POST(req: NextRequest) {
     .filter(Boolean)
     .join("\n");
 
-  // Partial-lead emails are scheduled 30 minutes out; completing step 2
-  // cancels them, so a finished lead produces ONE email. Abandoners still
-  // get captured — their partial simply arrives after the grace window.
-  // (30 min, not 10: real sellers deliberating on step 2 at 2 AM blew past
-  // the old window and produced partial+full pairs anyway.)
-  // Webhook + Slack stay immediate for both stages (pipeline feed).
-  const emailScheduledAt =
-    stage === "step1"
-      ? new Date(Date.now() + 30 * 60 * 1000).toISOString()
-      : undefined;
-  if (stage === "full" && typeof body.cancelEmailId === "string") {
-    await cancelScheduledEmail(body.cancelEmailId);
-  }
-
   const results = (
     await Promise.all([
       sendWebhook(payload),
-      sendEmail(subject, text, emailScheduledAt),
+      sendEmail(subject, text),
       sendSlack(text),
     ])
-  ).filter((r): r is Delivery & { emailId?: string } => r !== null);
+  ).filter((r): r is Delivery => r !== null);
 
   const failures = results.filter((r) => !r.ok);
   for (const f of failures) {
@@ -227,10 +188,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "delivery_failed" }, { status: 502 });
   }
 
-  const scheduledEmailId = results.find((r) => r.channel === "email")?.emailId;
-  return NextResponse.json({
-    ok: true,
-    delivered,
-    ...(stage === "step1" && scheduledEmailId ? { scheduledEmailId } : {}),
-  });
+  return NextResponse.json({ ok: true, delivered });
 }
