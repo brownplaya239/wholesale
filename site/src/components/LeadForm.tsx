@@ -6,7 +6,14 @@ import AddressAutocomplete from "@/components/AddressAutocomplete";
 import PhoneLink from "@/components/PhoneLink";
 import { CONSENT_TEXT, site } from "@/config/site";
 import { trackEvent } from "@/lib/analytics";
-import { rememberLead, type LeadSubmission } from "@/lib/lead";
+import {
+  addressProblem,
+  isFullName,
+  normalizeUSPhone,
+  rememberLead,
+  type AddressProblem,
+  type LeadSubmission,
+} from "@/lib/lead";
 
 /**
  * The two-step form (spec §4).
@@ -40,7 +47,10 @@ export default function LeadForm({ idPrefix = "lead" }: { idPrefix?: string }) {
   const [phone, setPhone] = useState("");
   const [consent, setConsent] = useState(false); // unticked by design
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<"" | "fields" | "consent" | "delivery">("");
+  const [honeypot, setHoneypot] = useState("");
+  const [error, setError] = useState<
+    "" | AddressProblem | "name" | "phone" | "consent" | "delivery"
+  >("");
   const leadId = useRef(newLeadId());
 
   const post = useCallback(async (body: LeadSubmission) => {
@@ -54,8 +64,10 @@ export default function LeadForm({ idPrefix = "lead" }: { idPrefix?: string }) {
 
   function handleStep1(e: React.FormEvent) {
     e.preventDefault();
-    if (address.trim().length < 4) {
-      setError("fields");
+    const problem = addressProblem(address);
+    if (problem) {
+      setError(problem);
+      document.getElementById(`${idPrefix}-address`)?.focus();
       return;
     }
     setError("");
@@ -68,8 +80,13 @@ export default function LeadForm({ idPrefix = "lead" }: { idPrefix?: string }) {
 
   async function handleStep2(e: React.FormEvent) {
     e.preventDefault();
-    if (name.trim().length < 2 || phone.replace(/\D/g, "").length < 10) {
-      setError("fields");
+    if (!isFullName(name)) {
+      setError("name");
+      return;
+    }
+    const phoneDigits = normalizeUSPhone(phone);
+    if (!phoneDigits) {
+      setError("phone");
       return;
     }
     if (!consent) {
@@ -84,11 +101,12 @@ export default function LeadForm({ idPrefix = "lead" }: { idPrefix?: string }) {
         leadId: leadId.current,
         address: address.trim(),
         placeId,
-        name: name.trim(),
-        phone: phone.trim(),
+        name: name.trim().replace(/\s+/g, " "),
+        phone: phoneDigits,
         consentChecked: consent,
         consentText: CONSENT_TEXT,
         pageUrl: window.location.href,
+        website: honeypot,
       });
       trackEvent("lead_submit", { page: window.location.pathname });
       rememberLead({
@@ -128,9 +146,27 @@ export default function LeadForm({ idPrefix = "lead" }: { idPrefix?: string }) {
               setPlaceId(pid);
             }}
           />
-          {error === "fields" && (
+          {error === "missing" && (
             <p className="mt-2 text-sm text-red-700">
               Please enter the property address.
+            </p>
+          )}
+          {error === "houseNumber" && (
+            <p className="mt-2 text-sm text-red-700">
+              Please add the house number at the start — e.g. 123{" "}
+              {address.split(",")[0].trim() || "Main St"}.
+            </p>
+          )}
+          {error === "notNJ" && (
+            <p className="mt-2 text-sm text-red-700">
+              We buy houses in New Jersey only — please enter a New Jersey
+              property address.
+            </p>
+          )}
+          {error === "incomplete" && (
+            <p className="mt-2 text-sm text-red-700">
+              Please pick your address from the suggestions, or include the
+              town and ZIP code.
             </p>
           )}
           <button
@@ -146,6 +182,16 @@ export default function LeadForm({ idPrefix = "lead" }: { idPrefix?: string }) {
         </form>
       ) : (
         <form onSubmit={handleStep2} noValidate>
+          <input
+            type="text"
+            name="website"
+            tabIndex={-1}
+            autoComplete="off"
+            aria-hidden="true"
+            value={honeypot}
+            onChange={(e) => setHoneypot(e.target.value)}
+            className="absolute -left-[9999px] h-px w-px opacity-0"
+          />
           <p className="mb-1 text-sm font-semibold text-trust">
             Step 2 of 2 — almost done
           </p>
@@ -187,9 +233,14 @@ export default function LeadForm({ idPrefix = "lead" }: { idPrefix?: string }) {
               </span>
             </label>
           </div>
-          {error === "fields" && (
+          {error === "name" && (
             <p className="mt-2 text-sm text-red-700">
-              Please add your name and a valid mobile number.
+              Please enter your first and last name.
+            </p>
+          )}
+          {error === "phone" && (
+            <p className="mt-2 text-sm text-red-700">
+              Please enter a valid 10-digit US mobile number.
             </p>
           )}
           {error === "consent" && (

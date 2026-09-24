@@ -78,6 +78,10 @@ export default function AddressAutocomplete({
         const ac = new window.google.maps.places.Autocomplete(inputRef.current, {
           types: ["address"],
           componentRestrictions: { country: "us" },
+          // Suggestions only from the New Jersey area (the box clips bits of
+          // NY/PA/DE — addressProblem() rejects those at submit).
+          bounds: { south: 38.92, west: -75.57, north: 41.36, east: -73.88 },
+          strictBounds: true,
           fields: ["formatted_address", "place_id"],
         });
         ac.addListener("place_changed", () => {

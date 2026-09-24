@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { LeadSubmission } from "@/lib/lead";
+import {
+  addressProblem,
+  formatUSPhone,
+  isFullName,
+  normalizeUSPhone,
+  type LeadSubmission,
+} from "@/lib/lead";
 
 export const runtime = "nodejs";
 
@@ -140,19 +146,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, delivered: 0 });
   }
   if (body.stage === "details") return handleDetails(body);
-  const stage = "full";
-  const address = clean(body.address);
-  if (address.length < 4) {
-    return NextResponse.json({ ok: false, error: "address_required" }, { status: 400 });
+  // Honeypot filled = bot. Look successful so it doesn't retry; deliver nothing.
+  if (clean(body.website)) {
+    console.warn(`LEAD HONEYPOT tripped leadId=${clean(body.leadId, 64)}`);
+    return NextResponse.json({ ok: true, delivered: 0 });
   }
 
-  const phone = clean(body.phone, 30);
-  if (clean(body.name, 120).length < 2) {
-    return NextResponse.json({ ok: false, error: "name_required" }, { status: 400 });
+  // Same validators as the form: nothing incomplete reaches the inbox.
+  const stage = "full";
+  const address = clean(body.address);
+  const addrProblem = addressProblem(address);
+  if (addrProblem) {
+    return NextResponse.json({ ok: false, error: `address_${addrProblem}` }, { status: 400 });
   }
-  if (phone.replace(/\D/g, "").length < 10) {
-    return NextResponse.json({ ok: false, error: "phone_required" }, { status: 400 });
+  if (!isFullName(clean(body.name, 120))) {
+    return NextResponse.json({ ok: false, error: "name_invalid" }, { status: 400 });
   }
+  const phoneDigits = normalizeUSPhone(clean(body.phone, 30));
+  if (!phoneDigits) {
+    return NextResponse.json({ ok: false, error: "phone_invalid" }, { status: 400 });
+  }
+  const phone = formatUSPhone(phoneDigits);
 
   const ip =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
@@ -166,7 +180,7 @@ export async function POST(req: NextRequest) {
     receivedAt: new Date().toISOString(),
     address,
     placeId: clean(body.placeId, 200),
-    name: clean(body.name, 120),
+    name: clean(body.name, 120).replace(/\s+/g, " "),
     phone,
     email: clean(body.email, 200),
     timeline: clean(body.timeline, 40),
