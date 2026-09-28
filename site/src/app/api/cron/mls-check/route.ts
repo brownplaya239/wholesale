@@ -8,7 +8,7 @@ import type { LeadRecord } from "@/lib/leads/store";
 import { mlsNearby, mlsSubject, testFeeds, type MlsListing } from "@/lib/enrich/mls";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 /**
  * MLS feed check without the admin login (Bearer $CRON_SECRET), used to
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
       timeline: null, priority: null, condition: null, occupancy: null, beds: null, baths: null, email: null, notes: null, workflow: null,
     } as unknown as LeadRecord;
     const email = enrichedEmail(lead, d, "new", assignWorkflow(d, facts));
-    return NextResponse.json({ ok: true, ...email, pool: d.comps.data?.pool, valuation: d.comps.data?.valuation });
+    return NextResponse.json({ ok: true, ...email, pool: d.comps.data?.pool, valuation: d.comps.data?.valuation, photoCheck: d.photoCheck, distress: d.insights.distress });
   }
   const feeds = await testFeeds();
   if (!address) return NextResponse.json({ ok: true, feeds });

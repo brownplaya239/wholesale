@@ -10,6 +10,7 @@ import { floodZone } from "./flood";
 import { cleanAddress, extractUnit, geocode } from "./geocode";
 import { nowIso } from "./http";
 import { buildInsights, type LeadFacts } from "./insights";
+import { photoCheck } from "./vision";
 import {
   addressParts,
   matchesSubject,
@@ -418,7 +419,7 @@ export async function buildDossier(input: DossierInput, db: Db | null): Promise<
   const { characteristics, conflicts } = mergeCharacteristics(parcelRes.parcel, history, mlsProperty);
 
   const kind = p?.kind ?? "other";
-  const [market, comps] = await Promise.all([
+  const [market, comps, photos] = await Promise.all([
     db && salesSrc && p
       ? marketStats(db, p.muncode, p.municipality, kind, p.propClass, salesSrc).catch(
           (e) => ({ status: "error", data: null, source: salesSrc, error: String(e) }) as Section<MarketStats>
@@ -429,6 +430,7 @@ export async function buildDossier(input: DossierInput, db: Db | null): Promise<
           (e) => ({ status: "error", data: null, source: salesSrc, error: String(e) }) as Section<CompsResult>
         )
       : Promise.resolve({ status: "missing", data: null, source: salesSrc, note: "Needs a matched parcel and location." } as Section<CompsResult>),
+    g ? photoCheck({ address: g.standardized, lat: g.lat, lng: g.lng, rings: p?.rings ?? null, streetView }) : Promise.resolve(undefined),
   ]);
   // The property's own recent sale is the best single value check.
   const ownSale = recentOwnSale(history.data ?? [], mlsProperty.data?.records ?? []);
@@ -466,6 +468,7 @@ export async function buildDossier(input: DossierInput, db: Db | null): Promise<
     comps,
     mls: { subject: mlsProperty, nearby: mlsListings },
     streetView,
+    photoCheck: photos,
     insights: { tags: [], risks: [], missing: [], recommended: [] },
     sources: [],
   };

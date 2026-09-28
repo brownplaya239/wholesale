@@ -1,4 +1,5 @@
 import type { MlsListing, MlsSubject } from "./mls";
+import type { PhotoCheck } from "./photoTypes";
 
 /**
  * The property dossier: everything enrichment learned about a lead's
@@ -181,7 +182,8 @@ export type Characteristics = {
 
 export type Conflict = { field: string; values: { value: string; source: string }[] };
 
-export type DistressSignal = { label: string; weight: 1 | 2; kind: "property" | "situation" };
+/** weight: 4 decisive, 2 strong, 1 moderate, 0 for information only. */
+export type DistressSignal = { label: string; weight: 0 | 1 | 2 | 4; kind: "property" | "situation" };
 
 /** How distressed the property/seller looks, from data + seller answers. */
 export type Distress = { level: "high" | "some" | "low" | "none"; score: number; signals: DistressSignal[] };
@@ -217,6 +219,8 @@ export type Dossier = {
   };
   /** Google Street View availability and imagery date. */
   streetView?: { status: "ok" | "none" | "not_configured" | "error"; date: string | null };
+  /** Claude's read of the Street View + satellite pictures. */
+  photoCheck?: Section<PhotoCheck>;
   insights: Insights;
   sources: SourceRef[];
 };

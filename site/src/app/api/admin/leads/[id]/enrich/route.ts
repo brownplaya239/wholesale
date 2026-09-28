@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { enrichLead } from "@/lib/leads/enrich";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 /** "Re-run enrichment" from the report. No email — you're already looking at it. */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

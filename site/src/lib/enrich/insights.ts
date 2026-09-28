@@ -4,6 +4,7 @@
  * sourced fact or a seller answer.
  */
 import { DISTRESS_NU, ESTATE_NU } from "@/lib/sr1a";
+import { INDICATOR_LABEL } from "./photoTypes";
 import type { Distress, DistressSignal, Dossier, Insights } from "./types";
 
 export const CORE_COUNTIES = ["MONMOUTH", "OCEAN", "MIDDLESEX", "SOMERSET", "UNION", "HUDSON", "ESSEX", "MERCER"];
@@ -79,7 +80,7 @@ const NOTE_FLAGS: { re: RegExp; label: string; weight: 1 | 2; kind: DistressSign
  */
 export function assessDistress(d: Dossier | null, lead: LeadFacts): Distress {
   const signals: DistressSignal[] = [];
-  const add = (label: string, weight: 1 | 2, kind: DistressSignal["kind"]) => signals.push({ label, weight, kind });
+  const add = (label: string, weight: DistressSignal["weight"], kind: DistressSignal["kind"]) => signals.push({ label, weight, kind });
   if (lead.condition === "Needs major repairs" || lead.condition === "Needs a full renovation") add(`Seller: "${lead.condition}"`, 2, "property");
   if (lead.occupancy === "Vacant") add("Vacant (seller-reported)", 2, "property");
   if (lead.occupancy === "Tenant-occupied") add("Tenant-occupied — possible tired landlord", 1, "situation");
@@ -106,6 +107,20 @@ export function assessDistress(d: Dossier | null, lead: LeadFacts): Distress {
       (r) => r.status && ENDED.has(r.status) && r.modified && Date.now() - Date.parse(r.modified) < 365 * 86_400_000
     );
     if (ended && !active) add(`MLS listing ${ended.status!.toLowerCase()} without selling`, 1, "situation");
+
+    // What the pictures show (Claude photo check). Low-confidence findings
+    // are shown in the email but never scored.
+    const pc = d.photoCheck?.status === "ok" ? d.photoCheck.data : null;
+    if (pc) {
+      const firm = pc.findings.filter((f) => f.confidence !== "low" && f.indicator !== "renovation_in_progress");
+      const what = [...new Set(firm.map((f) => INDICATOR_LABEL[f.indicator]))].join(", ");
+      const old = pc.streetViewDate && Date.now() - Date.parse(`${pc.streetViewDate}-01`) > 3 * 365 * 86_400_000 ? ` — Street View from ${pc.streetViewDate.slice(0, 4)}` : "";
+      if (pc.overall === "severe") add(`Photos: ${what || pc.summary}${old}`, 4, "property");
+      else if (pc.overall === "moderate") add(`Photos: ${what || pc.summary}${old}`, 2, "property");
+      else if (pc.overall === "minor" && what) add(`Photos, cosmetic: ${what}`, 0, "property");
+      if (pc.findings.some((f) => f.indicator === "renovation_in_progress" && f.confidence !== "low")) add("Photos: renovation in progress", 0, "property");
+      if (pc.street_view.house_number === "different") add("Street View may show the wrong house — the visible number doesn't match", 0, "property");
+    }
   }
   signals.sort((a, b) => b.weight - a.weight);
   const score = signals.reduce((n, s) => n + s.weight, 0);

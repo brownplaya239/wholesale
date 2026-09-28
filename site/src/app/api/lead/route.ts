@@ -25,7 +25,7 @@ import {
 
 export const runtime = "nodejs";
 // Enrichment runs after the response (after()) inside this budget.
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 /**
  * Lead intake (spec §4).

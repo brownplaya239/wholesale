@@ -20,6 +20,7 @@ import { reconcileOwnSale, isSimilar } from "../src/lib/enrich/comps.ts";
 import { answersUpdate, enrichedEmail } from "../src/lib/leads/reportEmail.ts";
 import { annotate, imageUrl, verifyImage } from "../src/lib/leads/images.ts";
 import { assessDistress } from "../src/lib/enrich/insights.ts";
+import { photoCheck } from "../src/lib/enrich/vision.ts";
 import jpeg from "jpeg-js";
 
 const NOW = new Date("2026-09-28T12:00:00Z");
@@ -536,4 +537,94 @@ test("image links are signed; the outline is drawn onto the picture", () => {
   assert.ok(r2 > 170 && g2 < 110 && b2 < 110, `red marker, got ${[r2, g2, b2]}`);
   const [r3, g3, b3] = at(5, 5); // untouched background
   assert.ok(Math.abs(r3 - 128) < 20 && Math.abs(g3 - 128) < 20 && Math.abs(b3 - 128) < 20);
+});
+
+// --- photo check (Claude vision) ---------------------------------------------
+
+const PHOTO_OK = {
+  street_view: { view: "clear", house_number: "matches" },
+  satellite: { view: "clear" },
+  findings: [
+    { indicator: "roof_tarp", seen_in: "satellite", confidence: "high", detail: "blue tarp over the rear roof slope" },
+    { indicator: "overgrown_yard", seen_in: "street_view", confidence: "medium", detail: "knee-high grass, shrubs over the windows" },
+    { indicator: "debris_or_junk", seen_in: "street_view", confidence: "low", detail: "possible pile by the garage" },
+  ],
+  overall: "severe",
+  summary: "Tarp on the roof and an overgrown yard — the worst-kept house on the block.",
+};
+
+test("photo check: not configured without a key; pictures + structured result with one", async () => {
+  const prevKey = process.env.ANTHROPIC_API_KEY;
+  const prevG = process.env.NEXT_PUBLIC_GOOGLE_PLACES_KEY;
+  delete process.env.ANTHROPIC_API_KEY;
+  const off = await photoCheck({ address: "12 Main St", lat: LAT, lng: LNG, rings: null, streetView: { status: "ok", date: "2025-09" } });
+  assert.equal(off.status, "not_configured");
+
+  process.env.ANTHROPIC_API_KEY = "test-key";
+  process.env.NEXT_PUBLIC_GOOGLE_PLACES_KEY = "g-key";
+  const tiny = jpeg.encode({ data: new Uint8Array(8 * 8 * 4).fill(90), width: 8, height: 8 }, 80).data;
+  let sent: Record<string, unknown> | null = null;
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    const u = String(url instanceof Request ? url.url : url);
+    if (u.includes("maps.googleapis.com")) return new Response(tiny, { status: 200, headers: { "content-type": "image/jpeg" } });
+    if (u.includes("/v1/messages")) {
+      sent = JSON.parse(String(init?.body ?? (url instanceof Request ? await url.text() : "{}")));
+      return new Response(
+        JSON.stringify({
+          id: "msg_1", type: "message", role: "assistant", model: "claude-opus-5",
+          content: [{ type: "text", text: JSON.stringify(PHOTO_OK) }],
+          stop_reason: "end_turn", stop_sequence: null, usage: { input_tokens: 1500, output_tokens: 400 },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+    throw new TypeError(`unexpected fetch ${u}`);
+  }) as typeof fetch;
+  try {
+    const r = await photoCheck({ address: "12 Main St, Freehold, NJ", lat: LAT, lng: LNG, rings: null, streetView: { status: "ok", date: "2025-09" } });
+    assert.equal(r.status, "ok", r.error);
+    assert.equal(r.data!.overall, "severe");
+    assert.equal(r.data!.streetViewDate, "2025-09");
+    const body = sent as unknown as { model: string; fallbacks: string; output_config: { format: { type: string } }; messages: { content: { type: string; text?: string }[] }[] };
+    assert.equal(body.model, "claude-opus-5");
+    assert.equal(body.fallbacks, "default");
+    assert.equal(body.output_config.format.type, "json_schema");
+    const blocks = body.messages[0].content;
+    assert.equal(blocks.filter((b) => b.type === "image").length, 2, "Street View + satellite");
+    assert.ok(blocks.some((b) => b.text?.includes("taken 2025-09")), "imagery date passed along");
+    assert.ok(blocks.some((b) => b.text?.includes("house number 12")));
+  } finally {
+    globalThis.fetch = realFetch;
+    if (prevKey === undefined) delete process.env.ANTHROPIC_API_KEY;
+    else process.env.ANTHROPIC_API_KEY = prevKey;
+    if (prevG === undefined) delete process.env.NEXT_PUBLIC_GOOGLE_PLACES_KEY;
+    else process.env.NEXT_PUBLIC_GOOGLE_PLACES_KEY = prevG;
+  }
+});
+
+test("photo findings drive the distress level; unconfirmed ones don't", async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async () => { throw new TypeError("offline test"); }) as typeof fetch;
+  const base = await buildDossier({ address: "12 Main St, Freehold, NJ 07728", unit: null, lead: FACTS }, null).finally(() => { globalThis.fetch = realFetch; });
+  const withPhotos = (data: unknown) => ({ ...base, photoCheck: { status: "ok" as const, data: { ...(data as object), streetViewDate: "2019-06", model: "claude-opus-5" } as never, source: null } });
+  const severe = assessDistress(withPhotos(PHOTO_OK), FACTS);
+  assert.equal(severe.level, "high", "severe photos alone are decisive");
+  assert.match(severe.signals[0].label, /^Photos: tarp on the roof, overgrown yard — Street View from 2019$/);
+  assert.ok(!severe.signals[0].label.includes("debris"), "low-confidence finding not scored");
+  const moderate = assessDistress(withPhotos({ ...PHOTO_OK, overall: "moderate" }), FACTS);
+  assert.equal(moderate.level, "some");
+  const minor = assessDistress(withPhotos({ ...PHOTO_OK, overall: "minor", findings: [{ indicator: "exterior_disrepair", seen_in: "street_view", confidence: "medium", detail: "faded paint" }] }), FACTS);
+  assert.equal(minor.level, "none", "cosmetic only is shown, not scored");
+  assert.equal(minor.signals[0].weight, 0);
+  const wrongHouse = assessDistress(withPhotos({ ...PHOTO_OK, overall: "none", findings: [], street_view: { view: "clear", house_number: "different" } }), FACTS);
+  assert.match(wrongHouse.signals[0].label, /wrong house/);
+  // And the email shows the photo check.
+  const d = { ...withPhotos(PHOTO_OK) };
+  d.insights = buildInsights(d, FACTS);
+  const e = enrichedEmail({ id: "x", name: "A B", phone: "(732) 555-0100", addressOriginal: "12 Main St", addressCurrent: "12 Main St", addressUnit: null, workflow: null } as never, d, "new", null);
+  assert.ok(e.html.includes("Photo check: severe"));
+  assert.ok(e.html.includes("Satellite · high — tarp on the roof: blue tarp over the rear roof slope"));
+  assert.ok(e.html.includes("(unconfirmed)"));
+  assert.match(e.text, /DISTRESS: HIGH/);
 });

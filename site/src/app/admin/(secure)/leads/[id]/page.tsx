@@ -8,6 +8,7 @@ import type { MlsListing } from "@/lib/enrich/mls";
 import { defaultWorksheet } from "@/lib/enrich/worksheet";
 import { currentDossier, leadFacts } from "@/lib/leads/enrich";
 import { imageUrl } from "@/lib/leads/images";
+import { photoLines } from "@/lib/leads/reportEmail";
 import type { Dossier, Fact, FactStatus, Section, SourceRef } from "@/lib/enrich/types";
 import { LEAD_STATUSES, STATUS_LABEL } from "@/lib/leads/pipeline";
 import { describeSource, type LeadSource } from "@/lib/leads/source";
@@ -387,6 +388,30 @@ export default async function LeadReport({
                 </a>
                 <span className="text-ink-soft">Map © OpenStreetMap contributors · satellite © Google/Esri · parcel outline from the NJ parcel layer</span>
               </p>
+              {d?.photoCheck && (
+                <div className="rounded-lg border border-line p-3 text-sm">
+                  {d.photoCheck.status === "ok" && d.photoCheck.data ? (
+                    <>
+                      <p>
+                        <strong>Photo check: {d.photoCheck.data.overall}</strong> — {d.photoCheck.data.summary}
+                      </p>
+                      {d.photoCheck.data.findings.length > 0 && (
+                        <ul className="mt-1 list-inside list-disc text-xs">
+                          {photoLines(d.photoCheck.data).map((l) => (
+                            <li key={l}>{l}</li>
+                          ))}
+                        </ul>
+                      )}
+                      <p className="mt-1 text-[11px] text-ink-soft">
+                        AI read of Street View{d.photoCheck.data.streetViewDate ? ` (${d.photoCheck.data.streetViewDate})` : ""} and satellite ·{" "}
+                        {d.photoCheck.data.model} — confirm on the walkthrough.
+                      </p>
+                    </>
+                  ) : (
+                    <SourceTag source={null} status={d.photoCheck.status} note={d.photoCheck.note ?? d.photoCheck.error} />
+                  )}
+                </div>
+              )}
             </div>
           ) : (
             <p className="text-sm text-ink-soft">No location — the address couldn't be geocoded.</p>

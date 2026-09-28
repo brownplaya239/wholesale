@@ -6,7 +6,8 @@
  */
 import { lastNameMatches, type Workflow } from "@/lib/enrich/insights";
 import type { MlsListing } from "@/lib/enrich/mls";
-import type { Distress, Dossier, SourceRef } from "@/lib/enrich/types";
+import { INDICATOR_LABEL, type PhotoCheck } from "@/lib/enrich/photoTypes";
+import type { Distress, Dossier, Section, SourceRef } from "@/lib/enrich/types";
 import { computeWorksheet, defaultWorksheet } from "@/lib/enrich/worksheet";
 import { imageUrl } from "./images";
 import { leadSubject, reportUrl } from "./notify";
@@ -169,6 +170,7 @@ function model(lead: LeadRecord, d: Dossier, workflow: Workflow | null, reason: 
     workflow,
     url: reportUrl(lead.id),
     distress: d.insights.distress ?? null,
+    photos: d.photoCheck ?? null,
     images: g
       ? {
           street: d.streetView?.status === "ok" ? imageUrl(lead.id, "street", d.generatedAt) : null,
@@ -189,6 +191,40 @@ const LEVEL: Record<Distress["level"], { label: string; bg: string; fg: string }
   none: { label: "DISTRESS: NONE IN THE DATA", bg: "#f0fdf4", fg: "#166534" },
 };
 
+const dots = (w: number) => (w >= 4 ? "<strong>●●●</strong>" : w === 2 ? "<strong>●●</strong>" : w === 1 ? "●" : "○");
+
+const VIEW_NOTE: Record<string, string> = {
+  partly_obstructed: "Street View partly blocked",
+  house_not_visible: "house not visible in Street View",
+  different: "Street View number doesn't match — may be the wrong house",
+};
+
+/** One line per photo-check finding, e.g. "Satellite · high — blue tarp on the rear roof slope". */
+export function photoLines(pc: PhotoCheck): string[] {
+  const order = { high: 0, medium: 1, low: 2 } as const;
+  return [...pc.findings]
+    .sort((a, b) => order[a.confidence] - order[b.confidence])
+    .map((f) => `${f.seen_in === "satellite" ? "Satellite" : "Street View"} · ${f.confidence}${f.confidence === "low" ? " (unconfirmed)" : ""} — ${INDICATOR_LABEL[f.indicator]}: ${f.detail}`);
+}
+
+function photoNotes(pc: PhotoCheck): string[] {
+  return [VIEW_NOTE[pc.street_view.view], VIEW_NOTE[pc.street_view.house_number], pc.satellite.view === "unclear" ? "satellite unclear" : undefined].filter(
+    (x): x is string => Boolean(x)
+  );
+}
+
+function photoText(s: Section<PhotoCheck> | null): string[] {
+  if (!s) return [];
+  if (s.status !== "ok" || !s.data) return s.status === "not_configured" ? [] : ["", `PHOTO CHECK — unavailable (${s.error ?? s.note ?? s.status})`];
+  const pc = s.data;
+  return [
+    "",
+    `PHOTO CHECK — ${pc.overall.toUpperCase()}: ${pc.summary}`,
+    ...photoLines(pc).map((l) => `• ${l}`),
+    ...photoNotes(pc).map((n) => `  (${n})`),
+  ];
+}
+
 function distressLine(x: Distress): string {
   return `${LEVEL[x.level].label}${x.level === "none" ? " — check the Street View photo" : ""}`;
 }
@@ -198,6 +234,7 @@ function toText(m: Model): string {
     `${m.intro}: ${m.title}`,
     m.distress && distressLine(m.distress),
     ...(m.distress?.signals ?? []).map((s) => `  • ${s.label}`),
+    ...photoText(m.photos),
     m.listed &&
       `⚠ CURRENTLY ${m.listed.status!.toUpperCase()} in the MLS${m.listed.office ? ` with ${m.listed.office}` : ""} — another broker's listing unless it's yours. Confirm status/expiration first.`,
     "",
@@ -255,7 +292,7 @@ function toHtml(m: Model): string {
   if (m.distress) {
     const L = LEVEL[m.distress.level];
     const signals = m.distress.signals.map(
-      (s) => `<li style="margin:2px 0">${esc(s.label)}${s.weight === 2 ? " <strong>●●</strong>" : " ●"}</li>`
+      (s) => `<li style="margin:2px 0">${esc(s.label)} ${dots(s.weight)}</li>`
     );
     parts.push(
       `<div style="margin:14px 0 0;padding:10px 12px;border-radius:8px;background:${L.bg};color:${L.fg}"><p style="margin:0;font-size:15px;font-weight:800;letter-spacing:.02em">${L.label}</p>${
@@ -279,6 +316,20 @@ function toHtml(m: Model): string {
     if (m.images.satellite) pics.push(`<a href="${esc(m.maps ?? "")}">${img(m.images.satellite, "Satellite view of the lot")}</a>`, cap("Satellite — tax parcel outlined in yellow"));
     if (m.images.map) pics.push(img(m.images.map, "Road map"), cap("Road map"));
     if (pics.length) parts.push(`<div style="margin-top:14px">${pics.join("")}</div>`);
+  }
+  const ph = m.photos;
+  if (ph?.status === "ok" && ph.data) {
+    const pc = ph.data;
+    const tone = pc.overall === "severe" ? "#991b1b" : pc.overall === "moderate" ? "#92400e" : pc.overall === "none" ? "#166534" : C.ink;
+    const lines = photoLines(pc);
+    const notes = photoNotes(pc);
+    parts.push(
+      `<div style="margin-top:4px;padding:10px 12px;border:1px solid ${C.line};border-radius:8px"><p style="margin:0;font-size:14px;color:${tone}"><strong>Photo check: ${esc(pc.overall)}</strong> — ${esc(pc.summary)}</p>${
+        lines.length ? `<ul style="margin:6px 0 0;padding-left:18px;font-size:13px">${lines.map((l) => `<li style="margin:2px 0">${esc(l)}</li>`).join("")}</ul>` : ""
+      }${notes.length ? `<p style="margin:6px 0 0;font-size:12px;color:${C.soft}">${esc(notes.join(" · "))}</p>` : ""}<p style="margin:6px 0 0;font-size:11px;color:${C.soft}">AI read of the pictures above${pc.streetViewDate ? ` (Street View from ${esc(pc.streetViewDate)})` : ""} — confirm on the walkthrough.</p></div>`
+    );
+  } else if (ph && ph.status !== "not_configured") {
+    parts.push(`<p style="margin:4px 0 0;font-size:12px;color:${C.soft}">Photo check unavailable (${esc(ph.error ?? ph.note ?? ph.status)}).</p>`);
   }
   if (m.listed) {
     parts.push(
