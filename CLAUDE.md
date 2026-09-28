@@ -72,7 +72,9 @@ Owner: Sum. Footprint: Monmouth, Middlesex, Somerset, Union, Hudson counties, NJ
 - Three deal paths, chosen buyer-first: great deal → buy directly; OK deal →
   assign the contract to an investor partner; not an investor deal → list it
   as the seller's agent through Coldwell Banker. The seller learns which in
-  writing before signing (docs/SELLER_ROLE_DISCLOSURE.html). Coldwell
+  writing before signing, via Sum's own contracts
+  (docs/SELLER_ROLE_DISCLOSURE.html is a shelved optional one-pager — don't
+  push it unless asked). Coldwell
   Banker office policy permits assignment; NJ does not require disclosing
   the assignment-fee amount (both confirmed by Sum 2026-09-28). No NJ
   wholesaling statute exists yet — S3824 (2023, not enacted) proposed a
