@@ -208,7 +208,8 @@ const day = (v: unknown) => str(v)?.slice(0, 10) ?? null;
 export function toListing(feedName: string, r: Record<string, unknown>): MlsListing {
   const full = num(r.BathroomsFull);
   const half = num(r.BathroomsHalf);
-  const baths = full != null ? full + (half ?? 0) * 0.5 : num(r.BathroomsTotalInteger);
+  // Feeds send 0 for "not entered"; a home with zero baths isn't real data.
+  const baths = (full != null ? full + (half ?? 0) * 0.5 : num(r.BathroomsTotalInteger)) || null;
   const address =
     str(r.UnparsedAddress) ?? [str(r.StreetNumber), str(r.StreetName), str(r.City)].filter(Boolean).join(" ");
   return {
