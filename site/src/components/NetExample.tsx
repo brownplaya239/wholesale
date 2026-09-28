@@ -7,17 +7,17 @@ import { Section, SectionTitle } from "@/components/Sections";
  * turns every first call into a bait-and-switch.
  */
 const EXAMPLE = {
-  valueFixedUp: 425_000,
-  repairs: 35_000,
+  valueFixedUp: 500_000,
+  repairs: 50_000,
   /** 70% of fixed-up value, minus repairs. */
-  cashOffer: 262_500,
+  cashOffer: 300_000,
   /** "Typical seller closing costs covered" — see HonestBroker. */
   cashClosingCosts: 0,
   /** Negotiable — shown only to illustrate the math. */
   commissionRate: 0.05,
-  listClosingCosts: 6_000,
+  listClosingCosts: 10_000,
   carryingMonths: 5,
-  carryingPerMonth: 2_500,
+  carryingPerMonth: 3_000,
 };
 
 const usd = (n: number) =>
@@ -43,17 +43,20 @@ function Column({
       <p className="text-lg font-bold">{title}</p>
       <p className="text-sm text-ink-soft">{subtitle}</p>
       <dl className="mt-4 space-y-2 text-sm">
-        {lines.map((l) => (
-          <div key={l.label} className="flex items-baseline justify-between gap-3">
-            <dt className="text-ink-soft">
-              {l.label}
-              {l.note && <span className="block text-xs text-ink-soft/80">{l.note}</span>}
-            </dt>
-            <dd className={`shrink-0 font-semibold tabular-nums ${l.amount < 0 ? "text-ink-soft" : "text-ink"}`}>
-              {l.amount < 0 ? `−${usd(-l.amount)}` : usd(l.amount)}
-            </dd>
-          </div>
-        ))}
+        {lines.map((l) => {
+          const amount = l.amount || 0; // a zero deduction arrives as −0; print it as $0
+          return (
+            <div key={l.label} className="flex items-baseline justify-between gap-3">
+              <dt className="text-ink-soft">
+                {l.label}
+                {l.note && <span className="block text-xs text-ink-soft/80">{l.note}</span>}
+              </dt>
+              <dd className={`shrink-0 font-semibold tabular-nums ${amount < 0 ? "text-ink-soft" : "text-ink"}`}>
+                {amount < 0 ? `−${usd(-amount)}` : usd(amount)}
+              </dd>
+            </div>
+          );
+        })}
       </dl>
       <div className="mt-4 flex items-baseline justify-between border-t border-line pt-3">
         <p className="font-bold">Estimated net to you</p>
