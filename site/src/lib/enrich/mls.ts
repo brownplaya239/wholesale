@@ -30,6 +30,7 @@ export type MlsListing = {
   /** Units in the building (multifamily). */
   units: number | null;
   listPrice: number | null;
+  originalListPrice: number | null;
   closePrice: number | null;
   closeDate: string | null;
   listDate: string | null;
@@ -167,7 +168,7 @@ const SELECT = [
   "BathroomsTotalInteger", "BathroomsFull", "BathroomsHalf", "LivingArea", "YearBuilt",
   "LotSizeAcres", "ListPrice", "ClosePrice", "CloseDate", "OnMarketDate", "ListingContractDate",
   "DaysOnMarket", "ListOfficeName", "ListAgentFullName", "Latitude", "Longitude",
-  "ModificationTimestamp", "NumberOfUnitsTotal",
+  "ModificationTimestamp", "NumberOfUnitsTotal", "OriginalListPrice",
 ].join(",");
 
 /**
@@ -229,6 +230,7 @@ export function toListing(feedName: string, r: Record<string, unknown>): MlsList
     lotAcres: num(r.LotSizeAcres),
     units: num(r.NumberOfUnitsTotal),
     listPrice: num(r.ListPrice),
+    originalListPrice: num(r.OriginalListPrice),
     closePrice: num(r.ClosePrice),
     closeDate: day(r.CloseDate),
     listDate: day(r.OnMarketDate) ?? day(r.ListingContractDate),

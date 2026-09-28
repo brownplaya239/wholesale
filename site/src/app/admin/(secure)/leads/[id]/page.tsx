@@ -7,6 +7,7 @@ import { assignWorkflow } from "@/lib/enrich/insights";
 import type { MlsListing } from "@/lib/enrich/mls";
 import { defaultWorksheet } from "@/lib/enrich/worksheet";
 import { currentDossier, leadFacts } from "@/lib/leads/enrich";
+import { imageUrl } from "@/lib/leads/images";
 import type { Dossier, Fact, FactStatus, Section, SourceRef } from "@/lib/enrich/types";
 import { LEAD_STATUSES, STATUS_LABEL } from "@/lib/leads/pipeline";
 import { describeSource, type LeadSource } from "@/lib/leads/source";
@@ -206,6 +207,8 @@ export default async function LeadReport({
   const d: Dossier | null = currentDossier(lead, facts);
   const mls = d?.mls ?? null;
   const listedNow = mls?.subject.data?.activeListing ?? null;
+  const distress = d?.insights.distress ?? null;
+  const satellite = d && d.geocode.data ? imageUrl(lead.id, "satellite", d.generatedAt) : null;
   const workflow = assignWorkflow(d, facts);
   const g = d?.geocode.data ?? null;
   const p = d?.parcel.data ?? null;
@@ -249,6 +252,28 @@ export default async function LeadReport({
           Enrichment failed ({lead.enrichmentError}). It retries daily, or re-run it now.
         </p>
       ) : null}
+      {distress && (
+        <div
+          className={`rounded-lg border px-3 py-2 text-sm ${
+            distress.level === "high"
+              ? "border-red-300 bg-red-50 text-red-900"
+              : distress.level === "some"
+                ? "border-amber-300 bg-amber-50 text-amber-900"
+                : distress.level === "none"
+                  ? "border-green-200 bg-green-50 text-green-900"
+                  : "border-line bg-white"
+          }`}
+        >
+          <strong>
+            Distress: {distress.level === "none" ? "none in the data" : distress.level === "some" ? "some signs" : distress.level}
+          </strong>
+          {distress.signals.length ? (
+            <span> — {distress.signals.map((s) => s.label).join(" · ")}</span>
+          ) : (
+            <span> — no signals in the records or the seller&apos;s answers; judge the photos.</span>
+          )}
+        </div>
+      )}
       {listedNow && (
         <p className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900">
           <strong>Currently {listedNow.status} in the MLS</strong>
@@ -342,7 +367,16 @@ export default async function LeadReport({
                   loading="lazy"
                   src={`https://www.openstreetmap.org/export/embed.html?bbox=${g.lng - 0.004},${g.lat - 0.0028},${g.lng + 0.004},${g.lat + 0.0028}&layer=mapnik&marker=${g.lat},${g.lng}`}
                 />
-                {p?.rings ? <ParcelShape rings={p.rings} /> : <div className="flex aspect-square items-center justify-center rounded-xl bg-cream text-xs text-ink-soft">No parcel outline</div>}
+                {satellite ? (
+                  <a href={`https://www.google.com/maps/@?api=1&map_action=map&center=${g.lat},${g.lng}&zoom=19&basemap=satellite`} target="_blank" rel="noopener noreferrer">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={satellite} alt="Satellite view, parcel outlined" className="aspect-square w-full rounded-xl object-cover" />
+                  </a>
+                ) : p?.rings ? (
+                  <ParcelShape rings={p.rings} />
+                ) : (
+                  <div className="flex aspect-square items-center justify-center rounded-xl bg-cream text-xs text-ink-soft">No parcel outline</div>
+                )}
               </div>
               <p className="flex flex-wrap gap-x-3 text-xs">
                 <a className="underline" target="_blank" rel="noopener noreferrer" href={`https://www.google.com/maps/@?api=1&map_action=map&center=${g.lat},${g.lng}&zoom=19&basemap=satellite`}>
@@ -351,7 +385,7 @@ export default async function LeadReport({
                 <a className="underline" target="_blank" rel="noopener noreferrer" href={`https://www.google.com/maps/search/?api=1&query=${g.lat},${g.lng}`}>
                   Google Maps
                 </a>
-                <span className="text-ink-soft">Map © OpenStreetMap contributors · parcel outline from the NJ parcel layer</span>
+                <span className="text-ink-soft">Map © OpenStreetMap contributors · satellite © Google/Esri · parcel outline from the NJ parcel layer</span>
               </p>
             </div>
           ) : (

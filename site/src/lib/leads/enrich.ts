@@ -22,6 +22,7 @@ export function leadFacts(l: LeadRecord): LeadFacts {
     occupancy: l.occupancy,
     createdAt: l.createdAt,
     photos: l.photoCount,
+    notes: l.notes,
     beds: l.beds,
     baths: l.baths,
   };

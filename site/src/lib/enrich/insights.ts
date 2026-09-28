@@ -4,7 +4,7 @@
  * sourced fact or a seller answer.
  */
 import { DISTRESS_NU, ESTATE_NU } from "@/lib/sr1a";
-import type { Dossier, Insights } from "./types";
+import type { Distress, DistressSignal, Dossier, Insights } from "./types";
 
 export const CORE_COUNTIES = ["MONMOUTH", "OCEAN", "MIDDLESEX", "SOMERSET", "UNION", "HUDSON", "ESSEX", "MERCER"];
 
@@ -16,6 +16,7 @@ export type LeadFacts = {
   occupancy: string | null;
   createdAt: string;
   photos?: number;
+  notes?: string | null;
   /** Seller-reported on the thank-you page, e.g. "3", "2.5", "5+". */
   beds?: string | null;
   baths?: string | null;
@@ -55,6 +56,60 @@ export function firstTouch(at: Date): string {
 export function lastNameMatches(sellerName: string, ownerName: string): boolean {
   const last = sellerName.trim().split(/\s+/).at(-1)?.toUpperCase() ?? "";
   return last.length > 1 && ownerName.toUpperCase().includes(last);
+}
+
+/** Seller notes that signal distress. */
+const NOTE_FLAGS: { re: RegExp; label: string; weight: 1 | 2; kind: DistressSignal["kind"] }[] = [
+  { re: /foreclos|lis pendens|sheriff|auction/i, label: "foreclosure", weight: 2, kind: "situation" },
+  { re: /behind on|missed (mortgage )?payments?|late on (the |my )?mortgage|\bdefault/i, label: "behind on payments", weight: 2, kind: "situation" },
+  { re: /bankrupt/i, label: "bankruptcy", weight: 2, kind: "situation" },
+  { re: /back taxes|tax (sale|lien)|\bliens?\b|judgment/i, label: "liens / back taxes", weight: 2, kind: "situation" },
+  { re: /probate|passed away|inherit|executor|deceased|\bestate\b/i, label: "estate / inherited", weight: 2, kind: "situation" },
+  { re: /fire|flood(ed|ing)|water damage|mold|hoard|condemn|code violation|foundation|roof (leak|damage)|asbestos|gutted/i, label: "physical damage", weight: 2, kind: "property" },
+  { re: /divorc|separat/i, label: "divorce", weight: 1, kind: "situation" },
+  { re: /evict|problem tenant|tenant (won't|not) pay/i, label: "tenant problems", weight: 1, kind: "situation" },
+  { re: /relocat|job (loss|transfer)|moving out of state/i, label: "relocation", weight: 1, kind: "situation" },
+];
+
+/**
+ * Distress at a glance: every signal points at a fact or a seller answer.
+ * Physical (the house) vs. situation (the seller). Tax delinquency and
+ * pre-foreclosure filings aren't in the public data, so "none" means none
+ * seen — the Street View photo is the other half of the check.
+ */
+export function assessDistress(d: Dossier | null, lead: LeadFacts): Distress {
+  const signals: DistressSignal[] = [];
+  const add = (label: string, weight: 1 | 2, kind: DistressSignal["kind"]) => signals.push({ label, weight, kind });
+  if (lead.condition === "Needs major repairs" || lead.condition === "Needs a full renovation") add(`Seller: "${lead.condition}"`, 2, "property");
+  if (lead.occupancy === "Vacant") add("Vacant (seller-reported)", 2, "property");
+  if (lead.occupancy === "Tenant-occupied") add("Tenant-occupied — possible tired landlord", 1, "situation");
+  if (lead.timeline === "ASAP") add("Needs to sell ASAP", 1, "situation");
+  for (const f of NOTE_FLAGS) if (lead.notes && f.re.test(lead.notes)) add(`Seller's notes mention ${f.label}`, f.weight, f.kind);
+  if (d) {
+    const p = d.parcel.data;
+    const deeds = d.history.data ?? [];
+    if (deeds[0]?.nuCode && ESTATE_NU.has(Number(deeds[0].nuCode))) add(`Inherited — last transfer by executor (${deeds[0].date})`, 2, "situation");
+    if (deeds.some((x) => x.nuCode && DISTRESS_NU.has(Number(x.nuCode)))) add("Deed history: sheriff's, foreclosure, short or lien sale", 2, "situation");
+    if (p?.owner.absentee && p.kind !== "land") add("Absentee owner — tax bills mail elsewhere", 1, "situation");
+    const imp = p?.assessed.improvement;
+    const net = p?.assessed.net;
+    if (p && p.kind !== "land" && imp != null && net && net > 0 && imp / net < 0.2) {
+      add(`Building assessed at only ${Math.round((imp / net) * 100)}% of the property's value — possible teardown or deferred upkeep`, 1, "property");
+    }
+    if (d.flood.data?.sfha) add(`Flood zone ${d.flood.data.zone}`, 1, "property");
+    const active = d.mls?.subject.data?.activeListing;
+    if (active?.daysOnMarket != null && active.daysOnMarket >= 90) add(`Listed ${active.daysOnMarket} days without selling`, 1, "situation");
+    if (active?.originalListPrice && active.listPrice && active.originalListPrice > active.listPrice * 1.03) {
+      add(`Price cut ${Math.round((1 - active.listPrice / active.originalListPrice) * 100)}% since listing`, 1, "situation");
+    }
+    const ended = (d.mls?.subject.data?.records ?? []).find(
+      (r) => r.status && ENDED.has(r.status) && r.modified && Date.now() - Date.parse(r.modified) < 365 * 86_400_000
+    );
+    if (ended && !active) add(`MLS listing ${ended.status!.toLowerCase()} without selling`, 1, "situation");
+  }
+  signals.sort((a, b) => b.weight - a.weight);
+  const score = signals.reduce((n, s) => n + s.weight, 0);
+  return { level: score >= 4 ? "high" : score >= 2 ? "some" : score === 1 ? "low" : "none", score, signals };
 }
 
 export function buildInsights(d: Dossier | null, lead: LeadFacts): Insights {
@@ -196,7 +251,9 @@ export function buildInsights(d: Dossier | null, lead: LeadFacts): Insights {
   if (!lead.timeline) missing.push("Timeline (seller didn't answer)");
   if (!lead.photos) missing.push("Photos");
 
-  return { tags: [...new Set(tags)], risks, missing, recommended };
+  const distress = assessDistress(d, lead);
+  if (distress.level === "high") tags.push("DISTRESSED");
+  return { tags: [...new Set(tags)], risks, missing, recommended, distress };
 }
 
 export function assignWorkflow(d: Dossier | null, lead: LeadFacts, now = new Date()): Workflow {

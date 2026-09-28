@@ -6,8 +6,9 @@
  */
 import { lastNameMatches, type Workflow } from "@/lib/enrich/insights";
 import type { MlsListing } from "@/lib/enrich/mls";
-import type { Dossier, SourceRef } from "@/lib/enrich/types";
+import type { Distress, Dossier, SourceRef } from "@/lib/enrich/types";
 import { computeWorksheet, defaultWorksheet } from "@/lib/enrich/worksheet";
+import { imageUrl } from "./images";
 import { leadSubject, reportUrl } from "./notify";
 import type { LeadRecord } from "./store";
 
@@ -167,14 +168,36 @@ function model(lead: LeadRecord, d: Dossier, workflow: Workflow | null, reason: 
     missing: d.insights.missing,
     workflow,
     url: reportUrl(lead.id),
+    distress: d.insights.distress ?? null,
+    images: g
+      ? {
+          street: d.streetView?.status === "ok" ? imageUrl(lead.id, "street", d.generatedAt) : null,
+          streetDate: d.streetView?.date ?? null,
+          satellite: imageUrl(lead.id, "satellite", d.generatedAt),
+          map: imageUrl(lead.id, "map", d.generatedAt),
+        }
+      : null,
     maps: g ? `https://www.google.com/maps/search/?api=1&query=${g.lat},${g.lng}` : null,
     streetView: g ? `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${g.lat},${g.lng}` : null,
   };
 }
 
+const LEVEL: Record<Distress["level"], { label: string; bg: string; fg: string }> = {
+  high: { label: "DISTRESS: HIGH", bg: "#fef2f2", fg: "#991b1b" },
+  some: { label: "DISTRESS: SOME SIGNS", bg: "#fffbeb", fg: "#92400e" },
+  low: { label: "DISTRESS: LOW", bg: "#f8fafc", fg: "#334155" },
+  none: { label: "DISTRESS: NONE IN THE DATA", bg: "#f0fdf4", fg: "#166534" },
+};
+
+function distressLine(x: Distress): string {
+  return `${LEVEL[x.level].label}${x.level === "none" ? " — check the Street View photo" : ""}`;
+}
+
 function toText(m: Model): string {
   const out: (string | null | false | undefined)[] = [
     `${m.intro}: ${m.title}`,
+    m.distress && distressLine(m.distress),
+    ...(m.distress?.signals ?? []).map((s) => `  • ${s.label}`),
     m.listed &&
       `⚠ CURRENTLY ${m.listed.status!.toUpperCase()} in the MLS${m.listed.office ? ` with ${m.listed.office}` : ""} — another broker's listing unless it's yours. Confirm status/expiration first.`,
     "",
@@ -229,6 +252,34 @@ function toHtml(m: Model): string {
     `<h1 style="margin:4px 0 2px;font-size:21px;line-height:1.25">${esc(m.title)}</h1>`,
     `<p style="margin:0;font-size:14px;color:${C.soft}">${esc(m.lead.name)} · <a href="tel:+1${m.lead.phone.replace(/\D/g, "")}" style="color:${C.accent}">${esc(m.lead.phone)}</a></p>`
   );
+  if (m.distress) {
+    const L = LEVEL[m.distress.level];
+    const signals = m.distress.signals.map(
+      (s) => `<li style="margin:2px 0">${esc(s.label)}${s.weight === 2 ? " <strong>●●</strong>" : " ●"}</li>`
+    );
+    parts.push(
+      `<div style="margin:14px 0 0;padding:10px 12px;border-radius:8px;background:${L.bg};color:${L.fg}"><p style="margin:0;font-size:15px;font-weight:800;letter-spacing:.02em">${L.label}</p>${
+        signals.length
+          ? `<ul style="margin:6px 0 0;padding-left:18px;font-size:14px">${signals.join("")}</ul>`
+          : `<p style="margin:4px 0 0;font-size:13px">No distress signals in the records or the seller's answers — judge the photos below.</p>`
+      }</div>`
+    );
+  }
+  if (m.images) {
+    const img = (src: string, alt: string) =>
+      `<img src="${esc(src)}" alt="${esc(alt)}" width="608" style="display:block;width:100%;max-width:608px;height:auto;border-radius:8px;border:0">`;
+    const cap = (t: string) => `<p style="margin:3px 0 10px;font-size:11px;color:${C.soft}">${t}</p>`;
+    const pics: string[] = [];
+    if (m.images.street) {
+      pics.push(
+        `<a href="${esc(m.streetView ?? "")}">${img(m.images.street, "Street View of the house")}</a>`,
+        cap(`Street View${m.images.streetDate ? ` · imagery from ${esc(m.images.streetDate)}` : ""} — tap to look around`)
+      );
+    }
+    if (m.images.satellite) pics.push(`<a href="${esc(m.maps ?? "")}">${img(m.images.satellite, "Satellite view of the lot")}</a>`, cap("Satellite — tax parcel outlined in yellow"));
+    if (m.images.map) pics.push(img(m.images.map, "Road map"), cap("Road map"));
+    if (pics.length) parts.push(`<div style="margin-top:14px">${pics.join("")}</div>`);
+  }
   if (m.listed) {
     parts.push(
       `<p style="margin:14px 0 0;padding:10px 12px;border-radius:8px;background:#fef2f2;color:${C.red};font-size:14px"><strong>Currently ${esc(m.listed.status)} in the MLS</strong>${m.listed.office ? ` with ${esc(m.listed.office)}` : ""}${m.listed.listPrice ? ` at ${money(m.listed.listPrice)}` : ""}. Unless it's your listing, don't interfere — confirm status and expiration first.</p>`
@@ -319,8 +370,12 @@ export function enrichedEmail(
  * follow-up track, the repair-based offer numbers, beds/baths disagreements.
  */
 export function answersUpdate(lead: LeadRecord, d: Dossier | null, workflow: Workflow | null, changed: string[]): string[] {
-  if (!d || !changed.some((c) => ["condition", "timeline", "priority", "beds", "baths"].includes(c))) return [];
+  if (!d || !changed.some((c) => ["condition", "occupancy", "timeline", "priority", "notes", "beds", "baths"].includes(c))) return [];
   const lines: string[] = ["", "Updated with these answers:"];
+  const x = d.insights.distress;
+  if (x && x.level !== "none" && changed.some((c) => ["condition", "occupancy", "timeline", "notes"].includes(c))) {
+    lines.push(`• ${LEVEL[x.level].label}: ${x.signals.map((s) => s.label).join("; ")}`);
+  }
   if (workflow) lines.push(`• Follow-up: ${workflow.label} — ${workflow.steps[0] ?? workflow.firstTouch}`);
   const n = reportNumbers(d, lead.condition);
   if (n && changed.includes("condition")) {

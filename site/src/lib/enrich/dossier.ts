@@ -4,6 +4,7 @@
  * builds. Nothing here writes to the lead record (see leads/enrich.ts).
  */
 import type { Db } from "@/lib/db";
+import { streetViewMeta } from "@/lib/leads/images";
 import { haversineMi, reconcileOwnSale, selectComps, type CompCandidate, type Subject } from "./comps";
 import { floodZone } from "./flood";
 import { cleanAddress, extractUnit, geocode } from "./geocode";
@@ -392,7 +393,7 @@ export async function buildDossier(input: DossierInput, db: Db | null): Promise<
     note: "Skipped — address not geocoded.",
   });
 
-  const [parcelRes, flood, mlsProperty, mlsListings] = await Promise.all([
+  const [parcelRes, flood, mlsProperty, mlsListings, streetView] = await Promise.all([
     g
       ? lookupParcel(g.lat, g.lng, parsed.base, unit)
       : Promise.resolve({
@@ -402,6 +403,7 @@ export async function buildDossier(input: DossierInput, db: Db | null): Promise<
     g ? floodZone(g.lat, g.lng) : Promise.resolve({ status: "missing", data: null, source: null, note: "Skipped — address not geocoded." } as Section<never>),
     g ? mlsSubject(g.standardized, g.postal, unit) : Promise.resolve(skipped<MlsSubject>()),
     g ? mlsNearby(g.postal, g.lat, g.lng, g.standardized, unit) : Promise.resolve(skipped<MlsListing[]>()),
+    g ? streetViewMeta(g.lat, g.lng) : Promise.resolve(undefined),
   ]);
   const p = parcelRes.parcel.data;
 
@@ -463,6 +465,7 @@ export async function buildDossier(input: DossierInput, db: Db | null): Promise<
     market,
     comps,
     mls: { subject: mlsProperty, nearby: mlsListings },
+    streetView,
     insights: { tags: [], risks: [], missing: [], recommended: [] },
     sources: [],
   };

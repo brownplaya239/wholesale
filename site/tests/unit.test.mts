@@ -18,6 +18,9 @@ import { mlsKind, mlsNearby, mlsSubject, streetKey, testFeeds, type MlsListing }
 import { municipalityAt } from "../src/lib/enrich/parcel.ts";
 import { reconcileOwnSale, isSimilar } from "../src/lib/enrich/comps.ts";
 import { answersUpdate, enrichedEmail } from "../src/lib/leads/reportEmail.ts";
+import { annotate, imageUrl, verifyImage } from "../src/lib/leads/images.ts";
+import { assessDistress } from "../src/lib/enrich/insights.ts";
+import jpeg from "jpeg-js";
 
 const NOW = new Date("2026-09-28T12:00:00Z");
 const daysAgo = (n: number) => new Date(NOW.getTime() - n * 86_400_000).toISOString().slice(0, 10);
@@ -489,4 +492,48 @@ test("report email carries the whole report inline, escaped, with offer numbers"
   const upd = answersUpdate({ ...(lead as object), condition: "Needs major repairs" } as never, dossier, null, ["condition"]);
   assert.match(upd.join("\n"), /Repairs for "Needs major repairs"/);
   assert.deepEqual(answersUpdate(lead, dossier, null, ["email"]), [], "nothing numeric changed");
+});
+
+// --- distress + pictures -----------------------------------------------------
+
+test("distress level from seller answers, notes and records", () => {
+  const hi = assessDistress(null, { ...FACTS, condition: "Needs major repairs", occupancy: "Vacant", notes: "we are behind on payments" });
+  assert.equal(hi.level, "high");
+  assert.deepEqual(hi.signals.map((x) => x.label), ['Seller: "Needs major repairs"', "Vacant (seller-reported)", "Seller's notes mention behind on payments"]);
+  assert.equal(assessDistress(null, { ...FACTS, occupancy: "Tenant-occupied", timeline: "ASAP" }).level, "some");
+  assert.equal(assessDistress(null, { ...FACTS, condition: "Move-in ready", occupancy: "I live there" }).level, "none");
+  assert.equal(assessDistress(null, { ...FACTS, notes: "Mom passed away, house is in probate" }).signals[0].label, "Seller's notes mention estate / inherited");
+  assert.ok(buildInsights(null, { ...FACTS, condition: "Needs a full renovation", occupancy: "Vacant" }).tags.includes("DISTRESSED"));
+});
+
+test("image links are signed; the outline is drawn onto the picture", () => {
+  const prev = process.env.CRON_SECRET;
+  process.env.CRON_SECRET = "test-secret";
+  try {
+    const url = imageUrl("lead-1", "satellite", "2026-09-28T12:00:00Z")!;
+    const u = new URL(url);
+    assert.match(u.pathname, /^\/api\/img\/lead-1\/satellite$/);
+    assert.equal(verifyImage("lead-1", "satellite", u.searchParams.get("v"), u.searchParams.get("s")), true);
+    assert.equal(verifyImage("lead-2", "satellite", u.searchParams.get("v"), u.searchParams.get("s")), false, "signature is per lead");
+    assert.equal(verifyImage("lead-1", "street", u.searchParams.get("v"), u.searchParams.get("s")), false, "and per picture");
+    assert.equal(verifyImage("lead-1", "satellite", u.searchParams.get("v"), "forged"), false);
+  } finally {
+    if (prev === undefined) delete process.env.CRON_SECRET;
+    else process.env.CRON_SECRET = prev;
+  }
+  // 64x40 grey picture of a 64 m x 40 m frame; outline a square lot in the middle.
+  const grey = jpeg.encode({ data: new Uint8Array(64 * 40 * 4).fill(128), width: 64, height: 40 }, 90).data;
+  const R = 6378137;
+  const e = { xmin: -32, ymin: -20, xmax: 32, ymax: 20 };
+  const toLng = (x: number) => (x / R) * (180 / Math.PI);
+  const toLat = (y: number) => (2 * Math.atan(Math.exp(y / R)) - Math.PI / 2) * (180 / Math.PI);
+  const ring: [number, number][] = [[-10, -10], [10, -10], [10, 10], [-10, 10], [-10, -10]].map(([x, y]) => [toLng(x), toLat(y)]);
+  const out = jpeg.decode(annotate(grey, e, 0, 0, [ring]), { formatAsRGBA: true });
+  const at = (x: number, y: number) => Array.from(out.data.slice((y * 64 + x) * 4, (y * 64 + x) * 4 + 3));
+  const [r, g, b] = at(42, 20); // right edge of the lot (x = +10 m -> pixel 42)
+  assert.ok(r > 180 && g > 150 && b < 110, `yellow outline, got ${[r, g, b]}`);
+  const [r2, g2, b2] = at(32, 20); // the address point: red dot
+  assert.ok(r2 > 170 && g2 < 110 && b2 < 110, `red marker, got ${[r2, g2, b2]}`);
+  const [r3, g3, b3] = at(5, 5); // untouched background
+  assert.ok(Math.abs(r3 - 128) < 20 && Math.abs(g3 - 128) < 20 && Math.abs(b3 - 128) < 20);
 });

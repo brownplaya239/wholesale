@@ -181,11 +181,18 @@ export type Characteristics = {
 
 export type Conflict = { field: string; values: { value: string; source: string }[] };
 
+export type DistressSignal = { label: string; weight: 1 | 2; kind: "property" | "situation" };
+
+/** How distressed the property/seller looks, from data + seller answers. */
+export type Distress = { level: "high" | "some" | "low" | "none"; score: number; signals: DistressSignal[] };
+
 export type Insights = {
   tags: string[];
   risks: string[];
   missing: string[];
   recommended: string[];
+  /** Absent on reports built before distress scoring existed. */
+  distress?: Distress;
 };
 
 export type Dossier = {
@@ -208,6 +215,8 @@ export type Dossier = {
     subject: Section<MlsSubject>;
     nearby: Section<MlsListing[]>;
   };
+  /** Google Street View availability and imagery date. */
+  streetView?: { status: "ok" | "none" | "not_configured" | "error"; date: string | null };
   insights: Insights;
   sources: SourceRef[];
 };
