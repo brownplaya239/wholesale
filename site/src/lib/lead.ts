@@ -24,6 +24,15 @@ export type LeadSubmission = {
   pageUrl: string;
   /** Honeypot — invisible to people; anything in it means a bot. */
   website?: string;
+  /** document.referrer at submit time (attribution). */
+  referrer?: string;
+  /** Thank-you-page extras (stage "details"). */
+  condition?: string;
+  occupancy?: string;
+  notes?: string;
+  unit?: string;
+  /** Seller-corrected street address (stage "details"). */
+  addressEdit?: string;
 };
 
 /*
@@ -89,10 +98,28 @@ export function formatUSPhone(d: string): string {
 }
 
 /**
- * The just-submitted lead, handed from the form to /thank-you so the optional
- * follow-up questions can reference it. sessionStorage only: dies with the tab.
+ * The just-submitted lead, handed from the form to /thank-you so the page can
+ * personalize and the optional questions update the same record (lead ID).
+ * sessionStorage only: dies with the tab.
  */
-export type RememberedLead = { leadId: string; name: string; address: string };
+export type LeadExtras = Partial<{
+  timeline: string;
+  priority: string;
+  condition: string;
+  occupancy: string;
+  email: string;
+  notes: string;
+  unit: string;
+  addressEdit: string;
+}>;
+
+export type RememberedLead = {
+  leadId: string;
+  name: string;
+  address: string;
+  extras?: LeadExtras;
+  photos?: number;
+};
 
 const LEAD_KEY = "hsnj_last_lead";
 

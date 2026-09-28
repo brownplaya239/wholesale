@@ -60,6 +60,7 @@ export default function LeadForm({ idPrefix = "lead" }: { idPrefix?: string }) {
       body: JSON.stringify(body),
     });
     if (!res.ok) throw new Error(`lead post failed: ${res.status}`);
+    return (await res.json().catch(() => ({}))) as { leadId?: string };
   }, []);
 
   function handleStep1(e: React.FormEvent) {
@@ -96,7 +97,7 @@ export default function LeadForm({ idPrefix = "lead" }: { idPrefix?: string }) {
     setError("");
     setSubmitting(true);
     try {
-      await post({
+      const res = await post({
         stage: "full",
         leadId: leadId.current,
         address: address.trim(),
@@ -106,11 +107,13 @@ export default function LeadForm({ idPrefix = "lead" }: { idPrefix?: string }) {
         consentChecked: consent,
         consentText: CONSENT_TEXT,
         pageUrl: window.location.href,
+        referrer: document.referrer || undefined,
         website: honeypot,
       });
       trackEvent("lead_submit", { page: window.location.pathname });
       rememberLead({
-        leadId: leadId.current,
+        // A repeat submission is merged into the seller's original lead.
+        leadId: res.leadId || leadId.current,
         name: name.trim(),
         address: address.trim(),
       });

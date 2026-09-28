@@ -1,4 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
+import { getDb, type Db } from "@/lib/db";
+import { assignWorkflow } from "@/lib/enrich/insights";
 import {
   addressProblem,
   formatUSPhone,
@@ -6,18 +8,34 @@ import {
   normalizeUSPhone,
   type LeadSubmission,
 } from "@/lib/lead";
+import { CONDITIONS, OCCUPANCY, oneOf, PRIORITIES, TIMELINES } from "@/lib/leadOptions";
+import { enrichLead, leadFacts } from "@/lib/leads/enrich";
+import { fanOut, leadSubject, reportUrl } from "@/lib/leads/notify";
+import { describeSource, parseSource } from "@/lib/leads/source";
+import {
+  claimNotification,
+  releaseNotification,
+  saveFullLead,
+  setWorkflow,
+  updateDetails,
+  type DetailsPatch,
+  type LeadRecord,
+} from "@/lib/leads/store";
 
 export const runtime = "nodejs";
+// Enrichment runs after the response (after()) inside this budget.
+export const maxDuration = 60;
 
 /**
  * Lead intake (spec §4).
  *
- * Failure-proof delivery: fan out to every configured channel in parallel —
- * CRM webhook, Resend email, Slack. A lead is "delivered" if ANY channel
- * succeeded; per-channel failures are logged loudly (Vercel log drains /
- * alerts pick these up). Only if EVERY channel fails does the client get an
- * error, so the UI can show the "call Sum directly" fallback instead of a
- * false success. A silent webhook failure at $200/lead is a fire.
+ * The lead email goes out immediately; the lead record is saved (when the
+ * database is configured) and property enrichment runs afterwards, updating
+ * the same record. Nothing about enrichment can delay or fail a lead.
+ *
+ * Failure-proof delivery: fan out to every configured channel; a lead is
+ * "delivered" if ANY channel succeeded. Only if EVERY channel fails does the
+ * client get an error, so the UI shows the "call Sumeet directly" fallback.
  *
  * Consent artifact: timestamp, IP, page URL, checkbox state, and the exact
  * consent wording ride with every payload — provable per-lead.
@@ -27,109 +45,6 @@ const MAX_LEN = 300;
 
 function clean(v: unknown, max = MAX_LEN): string {
   return typeof v === "string" ? v.trim().slice(0, max) : "";
-}
-
-type Delivery = { channel: string; ok: boolean; detail?: string };
-
-async function sendWebhook(payload: object): Promise<Delivery | null> {
-  const url = process.env.CRM_WEBHOOK_URL;
-  if (!url) return null;
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(8000),
-    });
-    return { channel: "crm_webhook", ok: res.ok, detail: `HTTP ${res.status}` };
-  } catch (err) {
-    return { channel: "crm_webhook", ok: false, detail: String(err) };
-  }
-}
-
-async function sendEmail(subject: string, text: string): Promise<Delivery | null> {
-  const key = process.env.RESEND_API_KEY;
-  const to = process.env.LEAD_ALERT_TO;
-  if (!key || !to) return null;
-  try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: process.env.LEAD_ALERT_FROM || "leads@housesoldnj.com",
-        to: to.split(",").map((s) => s.trim()),
-        subject,
-        text,
-      }),
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) {
-      // Surface the provider's error body — "HTTP 400" alone is undebuggable.
-      const detail = `HTTP ${res.status} ${(await res.text()).slice(0, 300)}`;
-      return { channel: "email", ok: false, detail };
-    }
-    return { channel: "email", ok: true, detail: `HTTP ${res.status}` };
-  } catch (err) {
-    return { channel: "email", ok: false, detail: String(err) };
-  }
-}
-
-async function sendSlack(text: string): Promise<Delivery | null> {
-  const url = process.env.SLACK_WEBHOOK_URL;
-  if (!url) return null;
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-      signal: AbortSignal.timeout(8000),
-    });
-    return { channel: "slack", ok: res.ok, detail: `HTTP ${res.status}` };
-  } catch (err) {
-    return { channel: "slack", ok: false, detail: String(err) };
-  }
-}
-
-/**
- * Optional extras the seller volunteers on /thank-you after the lead is
- * already delivered. Sent under the original lead's subject ("Re: …") so the
- * inbox threads it with the lead email instead of starting a new conversation.
- */
-async function handleDetails(body: Partial<LeadSubmission>) {
-  const leadId = clean(body.leadId, 64);
-  const timeline = clean(body.timeline, 40);
-  const priority = clean(body.priority, 60);
-  const email = clean(body.email, 200);
-  if (!leadId || (!timeline && !priority && !email)) {
-    return NextResponse.json({ ok: false, error: "nothing_to_add" }, { status: 400 });
-  }
-  const name = clean(body.name, 120);
-  const address = clean(body.address);
-  const subject = `Re: 🔥 LEAD: ${name} — ${address}`;
-  const text = [
-    `More from ${name || "this seller"} (added on the thank-you page):`,
-    timeline && `Timeline: ${timeline}`,
-    priority && `Priority: ${priority}`,
-    email && `Email: ${email}`,
-    `Lead ID: ${leadId}`,
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  const results = (
-    await Promise.all([
-      sendWebhook({ source: "housesoldnj.com", stage: "details", leadId, timeline, priority, email }),
-      sendEmail(subject, text),
-      sendSlack(text),
-    ])
-  ).filter((r): r is Delivery => r !== null);
-  for (const f of results.filter((r) => !r.ok)) {
-    console.error(`LEAD DETAILS DELIVERY FAILURE channel=${f.channel} detail=${f.detail} leadId=${leadId}`);
-  }
-  return NextResponse.json({ ok: results.some((r) => r.ok) || results.length === 0 });
 }
 
 export async function POST(req: NextRequest) {
@@ -146,6 +61,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, delivered: 0 });
   }
   if (body.stage === "details") return handleDetails(body);
+
   // Honeypot filled = bot. Look successful so it doesn't retry; deliver nothing.
   if (clean(body.website)) {
     console.warn(`LEAD HONEYPOT tripped leadId=${clean(body.leadId, 64)}`);
@@ -153,13 +69,13 @@ export async function POST(req: NextRequest) {
   }
 
   // Same validators as the form: nothing incomplete reaches the inbox.
-  const stage = "full";
   const address = clean(body.address);
   const addrProblem = addressProblem(address);
   if (addrProblem) {
     return NextResponse.json({ ok: false, error: `address_${addrProblem}` }, { status: 400 });
   }
-  if (!isFullName(clean(body.name, 120))) {
+  const name = clean(body.name, 120).replace(/\s+/g, " ");
+  if (!isFullName(name)) {
     return NextResponse.json({ ok: false, error: "name_invalid" }, { status: 400 });
   }
   const phoneDigits = normalizeUSPhone(clean(body.phone, 30));
@@ -167,80 +83,207 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "phone_invalid" }, { status: 400 });
   }
   const phone = formatUSPhone(phoneDigits);
+  const leadIdIn = clean(body.leadId, 64).replace(/[^\w-]/g, "") || crypto.randomUUID();
 
   const ip =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     req.headers.get("x-real-ip") ||
     "unknown";
+  const pageUrl = clean(body.pageUrl, 1000);
+  const source = parseSource(pageUrl, clean(body.referrer, 500) || null);
+  const consent = {
+    checked: body.consentChecked === true,
+    text: clean(body.consentText, 500),
+    timestamp: new Date().toISOString(),
+    ip,
+    userAgent: clean(req.headers.get("user-agent"), 300),
+    pageUrl,
+  };
+
+  // Persist first (fast), so duplicates are caught before any email goes out.
+  const db = await getDb();
+  let leadId = leadIdIn;
+  let persisted = false;
+  if (db) {
+    try {
+      const createdAt = new Date().toISOString();
+      const workflow = assignWorkflow(null, {
+        name,
+        timeline: null,
+        priority: null,
+        condition: null,
+        occupancy: null,
+        createdAt,
+      });
+      const saved = await saveFullLead(db, {
+        id: leadIdIn,
+        name,
+        phone,
+        address,
+        placeId: clean(body.placeId, 200) || null,
+        source,
+        consent,
+        workflow,
+      });
+      leadId = saved.lead.id;
+      persisted = true;
+      // Already delivered once (double-tap, retry, or same seller again within
+      // 24h): no second alert. If the first delivery failed, deliver now.
+      if (saved.outcome !== "created" && saved.lead.notified.initial) {
+        return NextResponse.json({ ok: true, delivered: 0, duplicate: true, leadId });
+      }
+    } catch (err) {
+      console.error(`LEAD PERSIST FAILURE leadId=${leadIdIn} ${String(err)}`);
+    }
+  }
 
   const payload = {
     source: "housesoldnj.com",
-    stage,
-    leadId: clean(body.leadId, 64) || "unknown",
+    stage: "full",
+    leadId,
     receivedAt: new Date().toISOString(),
     address,
     placeId: clean(body.placeId, 200),
-    name: clean(body.name, 120).replace(/\s+/g, " "),
+    name,
     phone,
-    email: clean(body.email, 200),
-    timeline: clean(body.timeline, 40),
-    priority: clean(body.priority, 60),
-    consent: {
-      checked: body.consentChecked === true,
-      text: clean(body.consentText, 500),
-      timestamp: new Date().toISOString(),
-      ip,
-      userAgent: clean(req.headers.get("user-agent"), 300),
-      pageUrl: clean(body.pageUrl, 1000),
-    },
+    attribution: source,
+    consent,
   };
 
-  const subject = `🔥 LEAD: ${payload.name} — ${address}`;
+  const subject = leadSubject(name, address);
   const text = [
     subject,
-    `Stage: ${stage}`,
     `Address: ${address}`,
-    payload.name && `Name: ${payload.name}`,
-    payload.phone && `Phone: ${payload.phone}`,
-    payload.email && `Email: ${payload.email}`,
-    payload.timeline && `Timeline: ${payload.timeline}`,
-    payload.priority && `Priority: ${payload.priority}`,
-    `Consent to call/text: ${payload.consent.checked ? "YES" : "no"} @ ${payload.consent.timestamp} (IP ${ip})`,
-    `Page: ${payload.consent.pageUrl}`,
-    `Lead ID: ${payload.leadId}`,
+    `Name: ${name}`,
+    `Phone: ${phone}`,
+    `Consent to call/text: ${consent.checked ? "YES" : "no"} @ ${consent.timestamp} (IP ${ip})`,
+    `Source: ${describeSource(source)}`,
+    `Page: ${pageUrl}`,
+    `Lead ID: ${leadId}`,
+    persisted && `Report (fills in within a minute): ${reportUrl(leadId)}`,
   ]
     .filter(Boolean)
     .join("\n");
 
-  const results = (
-    await Promise.all([
-      sendWebhook(payload),
-      sendEmail(subject, text),
-      sendSlack(text),
-    ])
-  ).filter((r): r is Delivery => r !== null);
-
-  const failures = results.filter((r) => !r.ok);
-  for (const f of failures) {
-    console.error(
-      `LEAD DELIVERY FAILURE channel=${f.channel} detail=${f.detail} leadId=${payload.leadId} stage=${stage}`
-    );
+  if (db && persisted && !(await claimNotification(db, leadId, "initial").catch(() => true))) {
+    // A concurrent identical request already claimed the alert.
+    return NextResponse.json({ ok: true, delivered: 0, duplicate: true, leadId });
   }
+
+  const results = await fanOut(subject, text, payload, `leadId=${leadId} stage=full`);
 
   // No channels configured at all: log the full lead so it's recoverable from
   // server logs, and still succeed for the user (dev / pre-launch state).
   if (results.length === 0) {
     console.warn(`LEAD (no delivery channels configured): ${JSON.stringify(payload)}`);
-    return NextResponse.json({ ok: true, delivered: 0 });
-  }
-
-  const delivered = results.length - failures.length;
-  if (delivered === 0) {
-    // Every configured channel failed — surface it so the UI can show the
-    // direct-call fallback rather than a false "we got it".
+  } else if (!results.some((r) => r.ok)) {
+    // Every configured channel failed — let a retry deliver it, and surface it
+    // so the UI shows the direct-call fallback rather than a false "we got it".
+    if (db && persisted) await releaseNotification(db, leadId, "initial").catch(() => {});
     console.error(`LEAD TOTAL DELIVERY FAILURE: ${JSON.stringify(payload)}`);
-    return NextResponse.json({ ok: false, error: "delivery_failed" }, { status: 502 });
+    return NextResponse.json({ ok: false, error: "delivery_failed", leadId }, { status: 502 });
   }
 
-  return NextResponse.json({ ok: true, delivered });
+  if (db && persisted) {
+    after(async () => {
+      await enrichLead(leadId, { notify: true, reason: "new" });
+    });
+  }
+
+  return NextResponse.json({ ok: true, delivered: results.filter((r) => r.ok).length, leadId });
+}
+
+/**
+ * Optional answers from /thank-you. Updates the original record (same lead
+ * ID); emails only what changed, threaded under the lead ("Re: …"); a changed
+ * address or unit re-runs enrichment.
+ */
+async function handleDetails(body: Partial<LeadSubmission>) {
+  const leadId = clean(body.leadId, 64).replace(/[^\w-]/g, "");
+  if (!leadId) return NextResponse.json({ ok: false, error: "lead_required" }, { status: 400 });
+
+  const patch: DetailsPatch = {};
+  const timeline = oneOf(TIMELINES, body.timeline);
+  const priority = oneOf(PRIORITIES, body.priority);
+  const condition = oneOf(CONDITIONS, body.condition);
+  const occupancy = oneOf(OCCUPANCY, body.occupancy);
+  if (timeline) patch.timeline = timeline;
+  if (priority) patch.priority = priority;
+  if (condition) patch.condition = condition;
+  if (occupancy) patch.occupancy = occupancy;
+  const email = clean(body.email, 200);
+  if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) patch.email = email;
+  const notes = clean(body.notes, 1000);
+  if (notes) patch.notes = notes;
+  if (typeof body.unit === "string") patch.unit = clean(body.unit, 12).replace(/^(unit|apt|#)\s*/i, "");
+  const editedAddress = clean(body.addressEdit);
+  if (editedAddress) {
+    const problem = addressProblem(editedAddress);
+    if (problem) return NextResponse.json({ ok: false, error: `address_${problem}` }, { status: 400 });
+    patch.address = editedAddress;
+  }
+  if (!Object.keys(patch).length) {
+    return NextResponse.json({ ok: false, error: "nothing_to_add" }, { status: 400 });
+  }
+
+  const db = await getDb();
+  const name = clean(body.name, 120);
+  const originalAddress = clean(body.address);
+  let changed: string[] = Object.keys(patch);
+  let addressChanged = false;
+  let subjectName = name;
+  let subjectAddress = originalAddress;
+  if (db) {
+    try {
+      const r = await updateDetails(db, leadId, patch);
+      if (r) {
+        changed = r.changed;
+        addressChanged = r.addressChanged;
+        subjectName = r.lead.name;
+        subjectAddress = r.lead.addressOriginal;
+        if (!changed.length) return NextResponse.json({ ok: true, changed: [] });
+        // Answers like timeline/priority change the follow-up track.
+        await setEnrichmentWorkflow(db, r.lead);
+      }
+    } catch (err) {
+      console.error(`LEAD DETAILS PERSIST FAILURE leadId=${leadId} ${String(err)}`);
+    }
+  }
+
+  const label: Record<string, string> = {
+    timeline: "Timeline",
+    priority: "Priority",
+    condition: "Condition",
+    occupancy: "Occupancy",
+    email: "Email",
+    notes: "Notes",
+    unit: "Unit",
+    address: "Corrected address",
+  };
+  const text = [
+    `More from ${subjectName || "this seller"} (added on the thank-you page):`,
+    ...changed.map((k) => `${label[k] ?? k}: ${patch[k as keyof DetailsPatch] || "(cleared)"}`),
+    addressChanged && "Address/unit changed — the property report is being refreshed.",
+    `Lead ID: ${leadId}`,
+    db && `Report: ${reportUrl(leadId)}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const results = await fanOut(
+    `Re: ${leadSubject(subjectName, subjectAddress)}`,
+    text,
+    { source: "housesoldnj.com", stage: "details", leadId, ...patch },
+    `leadId=${leadId} stage=details`
+  );
+
+  if (db && addressChanged) {
+    after(async () => {
+      await enrichLead(leadId, { notify: true, reason: "address_changed" });
+    });
+  }
+  return NextResponse.json({ ok: results.length === 0 || results.some((r) => r.ok), changed });
+}
+
+async function setEnrichmentWorkflow(db: Db, lead: LeadRecord): Promise<void> {
+  await setWorkflow(db, lead.id, assignWorkflow(lead.dossier, leadFacts(lead))).catch(() => {});
 }

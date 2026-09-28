@@ -1,3 +1,5 @@
+import { Analytics as VercelAnalytics } from "@vercel/analytics/next";
+import Analytics from "@/components/Analytics";
 import Footer from "@/components/Footer";
 import PhoneLink from "@/components/PhoneLink";
 import StickyCtaBar from "@/components/StickyCtaBar";
@@ -29,6 +31,9 @@ export default function LandingLayout({
       <Footer minimal />
       <div className="h-16 sm:hidden" aria-hidden />
       <StickyCtaBar />
+      {/* Public pages only — never on /admin (Clarity would record lead PII). */}
+      <Analytics />
+      <VercelAnalytics />
     </>
   );
 }

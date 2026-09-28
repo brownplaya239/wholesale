@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
-import PhoneLink from "@/components/PhoneLink";
+import Image from "next/image";
 import { Section } from "@/components/Sections";
 import { site } from "@/config/site";
-import LeadDetails from "./LeadDetails";
+import LeadFollowUp from "./LeadFollowUp";
+import ThankYouHero from "./ThankYouHero";
 import ThankYouTracking from "./ThankYouTracking";
 
 export const metadata: Metadata = {
@@ -12,75 +13,73 @@ export const metadata: Metadata = {
 
 /**
  * Conversion page (spec §4): confirm receipt, set expectations, prime the
- * callback. One secondary CTA only — a converted lead gets prepared for the
- * call, never routed back into the site.
+ * callback. A converted lead gets prepared for the call, never routed back
+ * into the site. Everything below the contact card is optional.
  */
 export default function ThankYouPage() {
   return (
     <>
       <ThankYouTracking />
       <Section>
-        <div className="mx-auto max-w-xl text-center">
-          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-trust/10">
-            <svg aria-hidden className="h-8 w-8 text-trust" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-            </svg>
-          </div>
-          <h1 className="text-balance text-4xl font-extrabold tracking-tight">
-            Got it — here's what happens next.
-          </h1>
-          <p className="mt-3 text-sm font-medium text-trust">
-            Your property information has been received successfully.
-          </p>
-          <LeadDetails />
-          <div className="mt-8 space-y-4 text-left">
-            <div className="rounded-2xl border border-line bg-white p-5">
-              <p className="font-bold">
-                1 · {site.principal.firstName} will call or text you ASAP —
-                same day
-              </p>
-              <p className="mt-1 text-sm text-ink-soft">
-                Between 8am–9pm, 7 days a week, you'll get a call from my
-                personal cell:{" "}
-                <PhoneLink className="font-semibold text-ink underline" />.
-                Save the number so you know it's me.
-              </p>
+        <div className="mx-auto max-w-xl">
+          <ThankYouHero />
+
+          <div className="mt-8 rounded-2xl border border-line bg-white p-5 sm:p-6">
+            <div className="flex items-center gap-4">
+              <Image
+                src={site.principal.photo}
+                alt={site.principal.fullName}
+                width={72}
+                height={72}
+                className="h-[72px] w-[72px] shrink-0 rounded-full object-cover"
+              />
+              <div>
+                <p className="font-bold">{site.principal.firstName} will personally call or text you — typically the same day.</p>
+                <p className="mt-0.5 text-sm text-ink-soft">
+                  From {site.phone.display} · 8 AM–9 PM, seven days a week. Save the number so you know it&apos;s {site.principal.firstName}.
+                </p>
+              </div>
             </div>
-            <div className="rounded-2xl border border-line bg-white p-5">
-              <p className="font-bold">
-                2 · Helpful to have nearby — but not required
-              </p>
-              <ul className="mt-1 list-inside list-disc text-sm text-ink-soft">
-                <li>Rough mortgage balance, if any</li>
-                <li>Your ideal selling timeline</li>
-                <li>Anything important about the property or its condition</li>
-              </ul>
-            </div>
-            <div className="rounded-2xl border border-line bg-white p-5">
-              <p className="font-bold">
-                3 · Get both numbers — typically within 24 hours
-              </p>
-              <p className="mt-1 text-sm text-ink-soft">
-                A written cash offer with proof of funds to purchase
-                the property — and an MLS data-driven listing proposal:
-                comparable sales, an accurately priced estimate of what you'd
-                likely net by listing, and roughly how long it would take to
-                sell on the market.
-              </p>
-              <p className="mt-2 text-sm text-ink-soft">
-                No pressure. No obligation. You choose the option and timeline
-                that makes the most sense for you and your family — we stay
-                flexible.
-              </p>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <a
+                href={`tel:${site.phone.e164}`}
+                className="rounded-lg bg-accent px-4 py-3.5 text-center font-bold text-white transition-colors hover:bg-accent-hover"
+              >
+                Call now
+              </a>
+              <a
+                href={`sms:${site.phone.e164}`}
+                className="rounded-lg border-2 border-accent px-4 py-3 text-center font-bold text-accent transition-colors hover:bg-accent hover:text-white"
+              >
+                Text {site.principal.firstName}
+              </a>
             </div>
           </div>
-          <a
-            href={`sms:${site.phone.e164}`}
-            className="btn mt-8 inline-flex items-center justify-center rounded-lg bg-accent px-6 py-4 text-base font-bold text-white transition-colors hover:bg-accent-hover"
-          >
-            Prefer not to wait? Text {site.principal.firstName} now →{" "}
-            {site.phone.display}
-          </a>
+
+          <div className="mt-8">
+            <p className="text-center text-lg font-bold">You&apos;ll get both numbers — typically within 24 hours</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-line bg-cream p-5">
+                <p className="text-sm font-bold uppercase tracking-wide text-accent">Cash offer</p>
+                <p className="mt-2 text-sm text-ink-soft">
+                  A written offer with proof of funds to buy the property as-is — no repairs, no showings, no
+                  commission on the cash sale, and a closing date you choose.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-line bg-cream p-5">
+                <p className="text-sm font-bold uppercase tracking-wide text-trust">Listing estimate</p>
+                <p className="mt-2 text-sm text-ink-soft">
+                  An MLS-based estimate of what you&apos;d likely net by listing — recent comparable sales, costs
+                  shown line by line, and roughly how long it would take to sell.
+                </p>
+              </div>
+            </div>
+            <p className="mt-4 text-center text-sm text-ink-soft">
+              No pressure and no obligation. Choose either option, or neither — the timeline is yours.
+            </p>
+          </div>
+
+          <LeadFollowUp />
         </div>
       </Section>
     </>
