@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { site } from "@/config/site";
 import { trackEvent } from "@/lib/analytics";
 import { addressProblem, recallLead, rememberLead, type LeadExtras, type RememberedLead } from "@/lib/lead";
-import { CONDITIONS, OCCUPANCY, PRIORITIES, TIMELINES } from "@/lib/leadOptions";
+import { BATHROOMS, BEDROOMS, CONDITIONS, OCCUPANCY, PRIORITIES, TIMELINES } from "@/lib/leadOptions";
 
 /**
  * Optional prep questions, asked only AFTER the lead is captured. Prefilled
@@ -41,16 +41,19 @@ function Chips({
   options,
   value,
   onChange,
+  compact,
 }: {
   label: string;
   options: readonly string[];
   value: string | undefined;
   onChange: (v: string | undefined) => void;
+  /** Short answers (numbers): one row. */
+  compact?: boolean;
 }) {
   return (
     <fieldset>
       <legend className="mb-1.5 text-sm font-semibold text-ink">{label}</legend>
-      <div className="grid grid-cols-2 gap-2">
+      <div className={`grid gap-2 ${compact ? "grid-cols-5" : "grid-cols-2"}`}>
         {options.map((o) => (
           <button
             key={o}
@@ -220,6 +223,8 @@ export default function LeadFollowUp() {
         <Chips label="What matters most to you?" options={PRIORITIES} value={draft.priority} onChange={set("priority")} />
         <Chips label="Condition of the property" options={CONDITIONS} value={draft.condition} onChange={set("condition")} />
         <Chips label="Who lives there now?" options={OCCUPANCY} value={draft.occupancy} onChange={set("occupancy")} />
+        <Chips label="Bedrooms" options={BEDROOMS} value={draft.beds} onChange={set("beds")} compact />
+        <Chips label="Bathrooms" options={BATHROOMS} value={draft.baths} onChange={set("baths")} compact />
 
         <label className="block text-sm font-semibold text-ink">
           Email for your written numbers

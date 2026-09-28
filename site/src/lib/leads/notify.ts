@@ -97,14 +97,23 @@ export function enrichedEmail(lead: LeadRecord, d: Dossier, reason: string): { s
   const g = d.geocode.data;
   const p = d.parcel.data;
   const v = d.comps.data?.valuation;
+  const listed = d.mls?.subject.data?.activeListing;
+  const nearby = d.mls?.nearby;
+  const asking = (nearby?.data ?? []).flatMap((l) => (l.listPrice ? [l.listPrice] : []));
+  const beds = d.characteristics.bedrooms;
+  const baths = d.characteristics.bathrooms;
   const lines: (string | number | false | null | undefined)[] = [
     reason === "address_changed" ? "Updated property report (seller edited the address/unit)." : "Property report ready.",
+    listed &&
+      `⚠ CURRENTLY ${listed.status!.toUpperCase()} in the MLS${listed.office ? ` with ${listed.office}` : ""} — another broker's listing unless it's yours. Confirm status/expiration first.`,
     "",
     `Address: ${g ? `${g.standardized} (${g.match} match)` : `NOT VERIFIED — ${lead.addressCurrent}`}`,
     lead.addressUnit && `Unit: ${lead.addressUnit} (${d.unit.status})`,
     p && `Parcel: ${p.municipality}, ${p.county} County — Block ${p.block} Lot ${p.lot}${p.qualifier ? ` Qual ${p.qualifier}` : ""}`,
     p && `Type: ${p.propClassLabel}${p.dwellings && p.dwellings > 1 ? ` · ${p.dwellings} dwellings` : ""}${p.yearBuilt ? ` · built ${p.yearBuilt}` : ""}${p.acres ? ` · ${p.acres.toFixed(2)} ac` : ""}`,
     d.characteristics.livingSpace.value && `Living area: ${d.characteristics.livingSpace.value.toLocaleString()} sq ft (${d.characteristics.livingSpace.source?.name ?? ""})`,
+    (beds.value != null || baths.value != null) &&
+      `Beds/baths: ${beds.value ?? "?"} bd / ${baths.value ?? "?"} ba (${beds.source?.id === "seller" ? "seller-reported" : beds.source?.id === "mls" ? "MLS" : beds.source?.name ?? "records"})`,
     p?.lastYearTaxes && `Taxes (last year): ${money(p.lastYearTaxes)} · Assessed ${money(p.assessed.net)}`,
     p?.owner.mailing && `Owner mailing: ${p.owner.mailing}${p.owner.absentee ? " (absentee)" : ""}`,
     d.history.data?.[0] && `Last deed: ${d.history.data[0].date} ${money(d.history.data[0].price)}${d.history.data[0].nuLabel ? ` — ${d.history.data[0].nuLabel}` : ""}`,
@@ -112,6 +121,9 @@ export function enrichedEmail(lead: LeadRecord, d: Dossier, reason: string): { s
     v
       ? `Comps: ${d.comps.data!.comps.length} sales → preliminary ${money(v.low)}–${money(v.high)} (${v.confidence} confidence)`
       : `Comps: ${d.comps.note ?? "none found"}`,
+    nearby?.status === "ok" && nearby.data?.length
+      ? `Nearby MLS: ${nearby.data.length} active/pending listing${nearby.data.length === 1 ? "" : "s"}${asking.length ? ` (asking ${money(Math.min(...asking))}–${money(Math.max(...asking))})` : ""}`
+      : null,
     "",
     d.insights.risks.length ? "Watch:" : null,
     ...d.insights.risks.slice(0, 5).map((r) => `• ${r}`),

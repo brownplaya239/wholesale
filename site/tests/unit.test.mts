@@ -13,7 +13,8 @@ import { pickUnit, locationUnit, kindOf } from "../src/lib/enrich/parcel.ts";
 import { parseSr1aLine, normalizeBlockLot, sr1aDate, nuLabel } from "../src/lib/sr1a.ts";
 import { dedupeKey } from "../src/lib/leads/store.ts";
 import { parseSource } from "../src/lib/leads/source.ts";
-import { buildDossier } from "../src/lib/enrich/dossier.ts";
+import { buildDossier, withSellerFacts } from "../src/lib/enrich/dossier.ts";
+import { mlsNearby, mlsSubject, streetKey, testFeeds } from "../src/lib/enrich/mls.ts";
 
 const NOW = new Date("2026-09-28T12:00:00Z");
 const daysAgo = (n: number) => new Date(NOW.getTime() - n * 86_400_000).toISOString().slice(0, 10);
@@ -195,4 +196,181 @@ test("NJ geocoder down -> Census fallback is used and labeled", async () => {
   } finally {
     globalThis.fetch = realFetch;
   }
+});
+
+// --- MLS (RESO Web API) -----------------------------------------------------
+
+const FACTS = { name: "Pat Seller", timeline: null, priority: null, condition: null, occupancy: null, createdAt: NOW.toISOString() };
+const MLS_ENV = ["MLS_MOMLS_URL", "MLS_MOMLS_TOKEN", "MLS_CJMLS_URL", "MLS_CJMLS_TOKEN", "MLS_CJMLS_CLIENT_ID", "MLS_CJMLS_CLIENT_SECRET", "MLS_CJMLS_TOKEN_URL"];
+
+async function withMls(env: Record<string, string>, handler: (url: URL, init?: RequestInit) => Response | Promise<Response>, fn: () => Promise<void>) {
+  const realFetch = globalThis.fetch;
+  for (const k of MLS_ENV) delete process.env[k];
+  Object.assign(process.env, env);
+  globalThis.fetch = (async (url: string | URL, init?: RequestInit) => handler(new URL(String(url)), init)) as typeof fetch;
+  try {
+    await fn();
+  } finally {
+    globalThis.fetch = realFetch;
+    for (const k of MLS_ENV) delete process.env[k];
+  }
+}
+const reso = (value: object[]) => new Response(JSON.stringify({ value }), { status: 200 });
+const row = (over: Record<string, unknown>) => ({
+  ListingKey: "k", ListingId: "22012345", StandardStatus: "Closed", StreetNumber: "12", StreetName: "Main Street",
+  City: "Freehold", PostalCode: "07728", PropertyType: "Residential", BedroomsTotal: 3, BathroomsFull: 2, BathroomsHalf: 1,
+  LivingArea: 1650, YearBuilt: 1962, ListPrice: 499000, ListOfficeName: "Other Realty", ModificationTimestamp: "2026-05-01T00:00:00Z",
+  Latitude: LAT, Longitude: LNG, ...over,
+});
+
+test("MLS not connected: sections say so, beds/baths listed as missing", async () => {
+  await withMls({}, () => { throw new TypeError("no network in test"); }, async () => {
+    const s = await mlsSubject("12 Main St, Freehold, NJ, 07728", "07728", null);
+    assert.equal(s.status, "not_configured");
+    assert.match(s.note ?? "", /MOMLS\/CJMLS/);
+    assert.equal((await mlsNearby("07728", LAT, LNG, "12 Main St")).status, "not_configured");
+    assert.deepEqual(await testFeeds(), []);
+  });
+});
+
+test("MLS subject: bearer token, street/unit matching, beds/baths, active listing", async () => {
+  const seen: string[] = [];
+  await withMls(
+    { MLS_MOMLS_URL: "https://mls.test/Reso/OData/", MLS_MOMLS_TOKEN: "tok123" },
+    (url, init) => {
+      seen.push((init?.headers as Record<string, string>).Authorization);
+      assert.match(url.searchParams.get("$filter") ?? "", /StreetNumber eq '12'/);
+      return reso([
+        row({ StandardStatus: "Active", ListingId: "A1", ListPrice: 525000, OnMarketDate: "2026-08-01", ModificationTimestamp: "2026-09-01T00:00:00Z" }),
+        row({ StandardStatus: "Expired", ListingId: "E1", BedroomsTotal: null, ModificationTimestamp: "2025-12-01T00:00:00Z" }),
+        row({ StreetName: "Maple Ave", ListingId: "X1" }), // same number, different street
+        row({ StreetName: "Main", StreetSuffix: "St", UnitNumber: "4", ListingId: "U4" }), // a unit, subject has none -> still same street
+      ]);
+    },
+    async () => {
+      const s = await mlsSubject("12 Main St, Freehold, New Jersey, 07728", "07728", null);
+      assert.equal(s.status, "ok");
+      assert.ok(seen.every((a) => a === "Bearer tok123"));
+      const ids = s.data!.records.map((r) => r.listingId);
+      assert.ok(!ids.includes("X1"), "different street excluded");
+      assert.equal(ids[0], "A1", "newest first");
+      assert.equal(s.data!.beds, 3);
+      assert.equal(s.data!.baths, 2.5, "full + half baths");
+      assert.equal(s.data!.activeListing?.listingId, "A1");
+      const unit = await mlsSubject("12 Main St, Freehold, New Jersey, 07728", "07728", "4");
+      assert.deepEqual(unit.data!.records.map((r) => r.listingId), ["U4"], "unit must match when given");
+    }
+  );
+});
+
+test("MLS: server rejects $select -> retried without it; 401 stops immediately", async () => {
+  let calls = 0;
+  await withMls(
+    { MLS_MOMLS_URL: "https://mls.test/odata", MLS_MOMLS_TOKEN: "t" },
+    (url) => {
+      calls++;
+      return url.searchParams.has("$select") ? new Response("bad select", { status: 400 }) : reso([row({})]);
+    },
+    async () => {
+      const s = await mlsSubject("12 Main St, Freehold, NJ, 07728", "07728", null);
+      assert.equal(s.status, "ok");
+      assert.equal(calls, 2);
+    }
+  );
+  calls = 0;
+  await withMls(
+    { MLS_MOMLS_URL: "https://mls.test/odata", MLS_MOMLS_TOKEN: "bad" },
+    () => {
+      calls++;
+      return new Response("unauthorized", { status: 401 });
+    },
+    async () => {
+      const s = await mlsSubject("12 Main St, Freehold, NJ, 07728", "07728", null);
+      assert.equal(s.status, "error");
+      assert.equal(calls, 1, "bad credentials aren't retried with other query variants");
+    }
+  );
+});
+
+test("MLS OAuth2 client credentials: token fetched once and reused", async () => {
+  let tokenCalls = 0;
+  await withMls(
+    { MLS_CJMLS_URL: "https://cj.test/odata", MLS_CJMLS_CLIENT_ID: "id", MLS_CJMLS_CLIENT_SECRET: "secret", MLS_CJMLS_TOKEN_URL: "https://cj.test/token" },
+    async (url, init) => {
+      if (url.pathname === "/token") {
+        tokenCalls++;
+        assert.match(String(init?.body), /grant_type=client_credentials/);
+        return new Response(JSON.stringify({ access_token: "oauth-abc", expires_in: 3600 }), { status: 200 });
+      }
+      assert.equal((init?.headers as Record<string, string>).Authorization, "Bearer oauth-abc");
+      return reso([row({ StandardStatus: "Closed", ClosePrice: 480000, CloseDate: "2024-03-01" })]);
+    },
+    async () => {
+      const s = await mlsSubject("12 Main St, Freehold, NJ, 07728", "07728", null);
+      await mlsSubject("12 Main St, Freehold, NJ, 07728", "07728", null);
+      assert.equal(s.data!.records[0].feed, "Central Jersey MLS (CJMLS)");
+      assert.equal(s.data!.records[0].closePrice, 480000);
+      assert.equal(tokenCalls, 1);
+    }
+  );
+});
+
+test("MLS nearby: current listings only, subject/leases/far-off excluded, nearest first", async () => {
+  await withMls(
+    { MLS_MOMLS_URL: "https://mls.test/odata", MLS_MOMLS_TOKEN: "t" },
+    () =>
+      reso([
+        row({ StreetNumber: "40", StreetName: "Oak Rd", UnparsedAddress: "40 Oak Rd, Freehold, NJ 07728", StandardStatus: "Active", Latitude: offset(0.8) }),
+        row({ StreetNumber: "9", StreetName: "Elm St", UnparsedAddress: "9 Elm St, Freehold, NJ 07728", StandardStatus: "Pending", Latitude: offset(0.3) }),
+        row({ UnparsedAddress: "12 Main St, Freehold, NJ 07728", StandardStatus: "Active" }), // the subject itself
+        row({ UnparsedAddress: "5 Far Ln, Freehold, NJ 07728", StandardStatus: "Active", Latitude: offset(3) }),
+        row({ UnparsedAddress: "7 Lease Ct, Freehold, NJ 07728", StandardStatus: "Active", PropertyType: "Residential Lease" }),
+        row({ UnparsedAddress: "8 Sold Ct, Freehold, NJ 07728", StandardStatus: "Closed" }),
+        row({ UnparsedAddress: "3 Hold Ct, Freehold, NJ 07728", StandardStatus: "Hold" }),
+      ]),
+    async () => {
+      const n = await mlsNearby("07728", LAT, LNG, "12 Main St, Freehold, New Jersey, 07728");
+      assert.equal(n.status, "ok");
+      assert.deepEqual(n.data!.map((l) => l.address.split(",")[0]), ["9 Elm St", "40 Oak Rd"]);
+      assert.ok(n.data![0].distanceMi! < n.data![1].distanceMi!);
+    }
+  );
+  assert.equal(streetKey("Dennisville Road"), streetKey("DENNISVILLE RD"));
+});
+
+test("listed with another broker -> LISTED-ELSEWHERE, verify track; seller beds/baths fill gaps or conflict", async () => {
+  await withMls(
+    { MLS_MOMLS_URL: "https://mls.test/odata", MLS_MOMLS_TOKEN: "t" },
+    (url) => {
+      if (url.hostname === "mls.test") return reso([row({ StandardStatus: "Active", OnMarketDate: "2026-09-01" })]);
+      throw new TypeError("public sources blocked in test");
+    },
+    async () => {
+      const d = await buildDossier({ address: "12 Main St, Freehold, NJ 07728", unit: null, lead: FACTS }, null);
+      // Geocoding is blocked here, so the MLS lookup never ran; exercise insights directly.
+      assert.equal(d.mls?.subject.status, "missing");
+      const s = await mlsSubject("12 Main St, Freehold, NJ, 07728", "07728", null);
+      const geocode = { ...d.geocode, status: "ok" as const, data: { standardized: "12 Main St, Freehold, NJ, 07728", lat: LAT, lng: LNG, score: 100, matchType: "PointAddress", match: "exact" as const, county: "Monmouth", city: "Freehold", postal: "07728", unit: null } };
+      const listed = { ...d, geocode, mls: { subject: s, nearby: d.mls!.nearby } };
+      const ins = buildInsights(listed, FACTS);
+      assert.ok(ins.tags.includes("LISTED-ELSEWHERE"));
+      assert.ok(ins.risks.some((r) => /Other Realty/.test(r) && /don't interfere/.test(r)));
+      const wf = assignWorkflow(listed, { ...FACTS, timeline: "ASAP" });
+      assert.equal(wf.track, "verify", "listing check beats HOT");
+      assert.match(wf.steps[0], /listing agreement's status and expiration/);
+      assert.ok(!wf.steps.some((s) => /exact address/.test(s)), "address is fine — no address step");
+
+      // No MLS beds/baths: seller's answers fill in, labeled as seller-reported.
+      const filled = withSellerFacts(d, { beds: "4", baths: "2.5" });
+      assert.equal(filled.characteristics.bedrooms.value, 4);
+      assert.equal(filled.characteristics.bathrooms.source?.id, "seller");
+      // MLS says 3 bd; seller says 4 -> surfaced as a conflict, MLS value kept.
+      const withMlsBeds = { ...d, characteristics: { ...d.characteristics, bedrooms: { value: 3, status: "ok" as const, source: { id: "mls", name: "MLS", retrievedAt: "" } } } };
+      const clash = withSellerFacts(withMlsBeds, { beds: "4", baths: null });
+      assert.equal(clash.characteristics.bedrooms.value, 3);
+      assert.deepEqual(clash.conflicts.find((c) => c.field === "bedrooms")?.values.map((v) => v.source), ["MLS", "seller"]);
+      assert.equal(withSellerFacts(withMlsBeds, { beds: "3", baths: null }).conflicts.length, d.conflicts.length, "agreement adds no conflict");
+      assert.equal(withSellerFacts(withMlsBeds, { beds: "5+", baths: null }).conflicts.length, d.conflicts.length + 1);
+    }
+  );
 });

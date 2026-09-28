@@ -3,9 +3,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { site } from "@/config/site";
 import { getDb } from "@/lib/db";
-import { assignWorkflow, buildInsights } from "@/lib/enrich/insights";
+import { assignWorkflow } from "@/lib/enrich/insights";
+import type { MlsListing } from "@/lib/enrich/mls";
 import { defaultWorksheet } from "@/lib/enrich/worksheet";
-import { leadFacts } from "@/lib/leads/enrich";
+import { currentDossier, leadFacts } from "@/lib/leads/enrich";
 import type { Dossier, Fact, FactStatus, Section, SourceRef } from "@/lib/enrich/types";
 import { LEAD_STATUSES, STATUS_LABEL } from "@/lib/leads/pipeline";
 import { describeSource, type LeadSource } from "@/lib/leads/source";
@@ -31,7 +32,7 @@ const num = (n: number | null | undefined, digits = 0) =>
 const STATUS_TEXT: Record<FactStatus, string> = {
   ok: "",
   missing: "No record found",
-  not_configured: "Needs a licensed provider",
+  not_configured: "Not connected",
   not_available: "No NJ public source",
   error: "Source failed",
 };
@@ -129,6 +130,63 @@ function ParcelShape({ rings }: { rings: [number, number][][] }) {
   );
 }
 
+const MLS_OFF = "Comes from your MLS — connect the MOMLS/CJMLS data feed to enable.";
+
+function ListingTable({ rows, nearby }: { rows: MlsListing[]; nearby?: boolean }) {
+  return (
+    <div className="mt-1 overflow-x-auto">
+      <table className="w-full min-w-[640px] text-left text-sm">
+        <thead className="text-xs uppercase tracking-wide text-ink-soft">
+          <tr>
+            {nearby && <th className="py-1">Address</th>}
+            <th className={nearby ? "" : "py-1"}>Status</th>
+            <th>Price</th>
+            <th>Bd / ba</th>
+            <th>Sq ft</th>
+            <th>{nearby ? "DOM" : "Dates"}</th>
+            {nearby && <th>Distance</th>}
+            <th>Office</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((l, i) => (
+            <tr key={`${l.feed}|${l.listingId ?? i}`} className="border-t border-line align-top">
+              {nearby && (
+                <td className="py-1.5 pr-2">
+                  <span className="font-semibold">{l.address}</span>
+                  {l.unit && <span> · Unit {l.unit}</span>}
+                  {l.propertyType && <span className="block text-xs text-ink-soft">{l.propertyType}</span>}
+                </td>
+              )}
+              <td className={`pr-2 ${nearby ? "" : "py-1.5"}`}>
+                {l.status ?? "—"}
+                {!nearby && l.listingId && <span className="block text-xs text-ink-soft">#{l.listingId}</span>}
+              </td>
+              <td className="pr-2">
+                {l.closePrice ? `${money(l.closePrice)} sold` : money(l.listPrice)}
+                {l.closePrice && l.listPrice ? <span className="block text-xs text-ink-soft">list {money(l.listPrice)}</span> : null}
+              </td>
+              <td className="pr-2 whitespace-nowrap">
+                {l.beds ?? "?"} / {l.baths ?? "?"}
+              </td>
+              <td className="pr-2">{num(l.sqft)}</td>
+              <td className="pr-2 text-xs">
+                {nearby
+                  ? (l.daysOnMarket ?? "—")
+                  : [l.listDate && `listed ${l.listDate}`, l.closeDate && `closed ${l.closeDate}`, l.daysOnMarket != null && `${l.daysOnMarket} DOM`]
+                      .filter(Boolean)
+                      .join(" · ") || "—"}
+              </td>
+              {nearby && <td className="pr-2">{l.distanceMi != null ? `${l.distanceMi} mi` : "—"}</td>}
+              <td className="text-xs text-ink-soft">{l.office ?? "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default async function LeadReport({
   params,
   searchParams,
@@ -142,11 +200,12 @@ export default async function LeadReport({
   const lead = await getLead(db, id);
   if (!lead) notFound();
   const photos = await listPhotoIds(db, id);
-  const stored: Dossier | null = lead.dossier;
   // Risks, missing info and the workflow depend on the seller's latest
   // answers (which can arrive after enrichment) — recompute on every view.
   const facts = { ...leadFacts(lead), photos: photos.length };
-  const d: Dossier | null = stored ? { ...stored, insights: buildInsights(stored, facts) } : null;
+  const d: Dossier | null = currentDossier(lead, facts);
+  const mls = d?.mls ?? null;
+  const listedNow = mls?.subject.data?.activeListing ?? null;
   const workflow = assignWorkflow(d, facts);
   const g = d?.geocode.data ?? null;
   const p = d?.parcel.data ?? null;
@@ -190,6 +249,16 @@ export default async function LeadReport({
           Enrichment failed ({lead.enrichmentError}). It retries daily, or re-run it now.
         </p>
       ) : null}
+      {listedNow && (
+        <p className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900">
+          <strong>Currently {listedNow.status} in the MLS</strong>
+          {listedNow.office ? ` with ${listedNow.office}` : ""}
+          {listedNow.agent ? ` (${listedNow.agent})` : ""}
+          {listedNow.listPrice ? ` at ${money(listedNow.listPrice)}` : ""}
+          {listedNow.listDate ? ` since ${listedNow.listDate}` : ""}. Unless that's your listing, it's under an exclusive agreement with
+          another broker — don't interfere; confirm its status and expiration first.
+        </p>
+      )}
 
       <div className="grid gap-5 lg:grid-cols-2">
         {/* 1 */}
@@ -202,6 +271,7 @@ export default async function LeadReport({
             <FactRow label="Priority" value={lead.priority ?? "Not answered"} />
             <FactRow label="Condition" value={lead.condition ?? "Not answered"} />
             <FactRow label="Occupancy" value={lead.occupancy ?? "Not answered"} />
+            {(lead.beds || lead.baths) && <FactRow label="Beds / baths (seller)" value={`${lead.beds ?? "?"} bd / ${lead.baths ?? "?"} ba`} />}
             {lead.notes && <FactRow label="Notes" value={<span className="whitespace-pre-wrap font-normal">{lead.notes}</span>} />}
             <FactRow label="Address as submitted" value={lead.addressOriginal} />
             {(lead.addressCurrent !== lead.addressOriginal || lead.addressUnit) && (
@@ -407,6 +477,15 @@ export default async function LeadReport({
               )}
               <p className="mt-2 text-xs text-ink-soft">{d.distress.note}</p>
             </div>
+            <div className="md:col-span-2">
+              <p className="text-sm font-semibold">MLS history</p>
+              {mls?.subject.data?.records.length ? (
+                <ListingTable rows={mls.subject.data.records} />
+              ) : (
+                <SourceTag source={null} status={mls?.subject.status ?? "not_configured"} note={mls?.subject.note ?? MLS_OFF} />
+              )}
+              {mls?.subject.status === "ok" && <SourceTag source={mls.subject.source} />}
+            </div>
           </div>
         ) : (
           <p className="text-sm text-ink-soft">Not enriched yet.</p>
@@ -465,6 +544,20 @@ export default async function LeadReport({
           <p className="text-sm text-ink-soft">{d?.comps.note ?? c?.note ?? "No comparable sales."}</p>
         )}
         {d && <SectionNote s={d.comps} />}
+        {d && (
+          <div className="mt-5">
+            <p className="text-sm font-semibold">Active & pending listings nearby — the seller's competition</p>
+            {mls?.nearby.data?.length ? (
+              <>
+                <ListingTable rows={mls.nearby.data} nearby />
+                <p className="mt-1 text-xs text-ink-soft">{mls.nearby.note} Asking prices, not sales — not used in the value range.</p>
+                <SourceTag source={mls.nearby.source} />
+              </>
+            ) : (
+              <SourceTag source={null} status={mls?.nearby.status ?? "not_configured"} note={mls?.nearby.note ?? MLS_OFF} />
+            )}
+          </div>
+        )}
       </Card>
 
       {/* 6 */}
@@ -502,41 +595,6 @@ export default async function LeadReport({
               ) : (
                 d && <SectionNote s={d.market} />
               )}
-              <div className="rounded-lg bg-white p-3">
-                <p className="font-semibold">Provider valuation (listing-based)</p>
-                {d?.provider.avm.data ? (
-                  <>
-                    <p>
-                      {money(d.provider.avm.data.price)} ({money(d.provider.avm.data.low)}–{money(d.provider.avm.data.high)})
-                    </p>
-                    <p className="text-xs text-ink-soft">{d.provider.avm.note}</p>
-                  </>
-                ) : (
-                  <SourceTag source={null} status={d?.provider.avm.status ?? "not_configured"} note={d?.provider.avm.note} />
-                )}
-              </div>
-              {d?.provider.rent.data && (
-                <div className="rounded-lg bg-white p-3">
-                  <p className="font-semibold">Rent estimate</p>
-                  <p>
-                    {money(d.provider.rent.data.rent)}/mo ({money(d.provider.rent.data.low)}–{money(d.provider.rent.data.high)})
-                  </p>
-                </div>
-              )}
-              <div className="rounded-lg bg-white p-3">
-                <p className="font-semibold">Active listings nearby</p>
-                {d?.provider.listings.data?.length ? (
-                  <ul className="text-xs">
-                    {d.provider.listings.data.map((l) => (
-                      <li key={l.address}>
-                        {l.address} · {money(l.price)} · {l.status} · {l.daysOnMarket ?? "?"} DOM
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <SourceTag source={null} status={d?.provider.listings.status ?? "not_configured"} note={d?.provider.listings.note} />
-                )}
-              </div>
             </div>
           </div>
         ) : (

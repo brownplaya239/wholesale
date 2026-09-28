@@ -9,8 +9,8 @@ import { floodZone } from "./flood";
 import { cleanAddress, extractUnit, geocode } from "./geocode";
 import { nowIso } from "./http";
 import { buildInsights, type LeadFacts } from "./insights";
+import { mlsConfigured, mlsNearby, mlsSubject, type MlsListing, type MlsSubject } from "./mls";
 import { fetchPinAttrs, lookupParcel, muncodesNear, type PinAttrs } from "./parcel";
-import { rentcastAvm, rentcastConfigured, rentcastListings, rentcastProperty, rentcastRent } from "./rentcast";
 import {
   compCandidates,
   deedHistory,
@@ -30,7 +30,6 @@ import type {
   GeocodeData,
   MarketStats,
   ParcelData,
-  ProviderProperty,
   Section,
   SourceRef,
 } from "./types";
@@ -46,71 +45,112 @@ function fact<T>(value: T | null | undefined, source: SourceRef | null, fallback
   return value == null ? { value: null, status: fallback, source: null } : { value, status: "ok", source };
 }
 
+/**
+ * Picks each characteristic from the best source (official records first,
+ * MLS next) and records every disagreement between sources.
+ */
 export function mergeCharacteristics(
   parcel: Section<ParcelData>,
   history: Section<DeedRecord[]>,
-  provider: Section<ProviderProperty>
+  mls: Section<MlsSubject>
 ): { characteristics: Characteristics; conflicts: Conflict[] } {
   const p = parcel.data;
   const deeds = history.data ?? [];
-  const rc = provider.data;
-  const rcStatus = provider.status === "not_configured" ? "not_configured" : "missing";
+  const m = mls.data;
+  const mlsStatus = mls.status === "not_configured" ? "not_configured" : "missing";
   const deedSqft = deeds.find((d) => d.livingSpace)?.livingSpace ?? null;
   const deedYear = deeds.find((d) => d.yearBuilt)?.yearBuilt ?? null;
 
-  const livingSpace = deedSqft
-    ? fact(deedSqft, history.source)
-    : fact(rc?.squareFootage, provider.source, rcStatus);
+  const livingSpace = deedSqft ? fact(deedSqft, history.source) : fact(m?.sqft, mls.source, mlsStatus);
   const yearBuilt = p?.yearBuilt
     ? fact(p.yearBuilt, parcel.source)
     : deedYear
       ? fact(deedYear, history.source)
-      : fact(rc?.yearBuilt, provider.source, rcStatus);
-  const lotAcres = p?.acres
-    ? fact(p.acres, parcel.source)
-    : fact(rc?.lotSize ? Math.round((rc.lotSize / 43_560) * 100) / 100 : null, provider.source, rcStatus);
+      : fact(m?.yearBuilt, mls.source, mlsStatus);
+  const lotAcres = p?.acres ? fact(p.acres, parcel.source) : fact(m?.lotAcres, mls.source, mlsStatus);
 
   const conflicts: Conflict[] = [];
   const years = [
     p?.yearBuilt ? { value: p.yearBuilt, source: "tax list" } : null,
     deedYear ? { value: deedYear, source: "deed record" } : null,
-    rc?.yearBuilt ? { value: rc.yearBuilt, source: "RentCast" } : null,
+    m?.yearBuilt ? { value: m.yearBuilt, source: "MLS" } : null,
   ].filter(Boolean) as { value: number; source: string }[];
   if (years.length > 1 && Math.max(...years.map((y) => y.value)) - Math.min(...years.map((y) => y.value)) > 2) {
-    conflicts.push({ field: "year built", values: years.map((y) => ({ value: String(y.value), source: y.source })) });
+    // Sources that agree share one entry: "1988 (tax list, deed record) vs 1960 (MLS)".
+    const grouped = new Map<number, string[]>();
+    for (const y of years) grouped.set(y.value, [...(grouped.get(y.value) ?? []), y.source]);
+    conflicts.push({ field: "year built", values: [...grouped].map(([value, src]) => ({ value: String(value), source: src.join(", ") })) });
   }
-  if (deedSqft && rc?.squareFootage && Math.abs(deedSqft - rc.squareFootage) / deedSqft > 0.1) {
+  if (deedSqft && m?.sqft && Math.abs(deedSqft - m.sqft) / deedSqft > 0.1) {
     conflicts.push({
       field: "living area",
       values: [
         { value: `${deedSqft.toLocaleString()} sq ft`, source: "deed record" },
-        { value: `${rc.squareFootage.toLocaleString()} sq ft`, source: "RentCast" },
+        { value: `${m.sqft.toLocaleString()} sq ft`, source: "MLS" },
       ],
     });
   }
-  if (p?.acres && rc?.lotSize) {
-    const rcAcres = rc.lotSize / 43_560;
-    if (Math.abs(p.acres - rcAcres) / p.acres > 0.25) {
-      conflicts.push({
-        field: "lot size",
-        values: [
-          { value: `${p.acres.toFixed(2)} ac`, source: "parcel map" },
-          { value: `${rcAcres.toFixed(2)} ac`, source: "RentCast" },
-        ],
-      });
-    }
+  if (p?.acres && m?.lotAcres && Math.abs(p.acres - m.lotAcres) / p.acres > 0.25) {
+    conflicts.push({
+      field: "lot size",
+      values: [
+        { value: `${p.acres.toFixed(2)} ac`, source: "parcel map" },
+        { value: `${m.lotAcres.toFixed(2)} ac`, source: "MLS" },
+      ],
+    });
   }
   return {
     conflicts,
     characteristics: {
       livingSpace,
       yearBuilt,
-      bedrooms: fact(rc?.bedrooms, provider.source, rcStatus),
-      bathrooms: fact(rc?.bathrooms, provider.source, rcStatus),
+      bedrooms: fact(m?.beds, mls.source, mlsStatus),
+      bathrooms: fact(m?.baths, mls.source, mlsStatus),
       lotAcres,
       dwellings: fact(p?.dwellings, parcel.source),
     },
   };
+}
+
+const SELLER_SOURCE: SourceRef = { id: "seller", name: "Seller-reported (thank-you page)", retrievedAt: "" };
+
+/** "5+" -> 5, "2.5" -> 2.5 */
+const sellerNum = (v: string | null | undefined) => (v ? Number.parseFloat(v) : Number.NaN);
+
+/**
+ * Seller's own bed/bath answers: fill the gap when no MLS record exists, and
+ * flag it when they disagree with the MLS. Answers can arrive after
+ * enrichment, so the report applies this on every view.
+ */
+export function withSellerFacts(d: Dossier, facts: Pick<LeadFacts, "beds" | "baths">): Dossier {
+  const out: Dossier = { ...d, characteristics: { ...d.characteristics }, conflicts: [...d.conflicts] };
+  for (const [key, answer, label] of [
+    ["bedrooms", facts.beds, "bedrooms"],
+    ["bathrooms", facts.baths, "bathrooms"],
+  ] as const) {
+    const n = sellerNum(answer);
+    if (Number.isNaN(n)) continue;
+    const cur = out.characteristics[key];
+    if (cur.status !== "ok") {
+      out.characteristics[key] = {
+        value: n,
+        status: "ok",
+        source: SELLER_SOURCE,
+        note: answer?.endsWith("+") ? `${answer} (or more)` : undefined,
+      };
+    } else if (cur.value != null && cur.value !== n && !(answer?.endsWith("+") && cur.value >= n)) {
+      if (!out.conflicts.some((c) => c.field === label)) {
+        out.conflicts.push({
+          field: label,
+          values: [
+            { value: String(cur.value), source: cur.source?.id === "mls" ? "MLS" : cur.source?.name ?? "records" },
+            { value: answer!, source: "seller" },
+          ],
+        });
+      }
+    }
+  }
+  return out;
 }
 
 async function runComps(
@@ -189,12 +229,17 @@ export type DossierInput = { address: string; unit: string | null; lead: LeadFac
 export async function buildDossier(input: DossierInput, db: Db | null): Promise<Dossier> {
   const parsed = extractUnit(cleanAddress(input.address));
   const unit = input.unit?.trim() || parsed.unit;
-  const oneLine = `${parsed.base}${unit ? ` Unit ${unit}` : ""}`;
 
-  const [geo, providerProperty] = await Promise.all([geocode(parsed.base, unit), rentcastProperty(oneLine)]);
+  const geo = await geocode(parsed.base, unit);
   const g = geo.data;
+  const skipped = <T,>(): Section<T> => ({
+    status: g ? "missing" : mlsConfigured() ? "missing" : "not_configured",
+    data: null,
+    source: null,
+    note: "Skipped — address not geocoded.",
+  });
 
-  const [parcelRes, flood, listings] = await Promise.all([
+  const [parcelRes, flood, mlsProperty, mlsListings] = await Promise.all([
     g
       ? lookupParcel(g.lat, g.lng, parsed.base, unit)
       : Promise.resolve({
@@ -202,14 +247,8 @@ export async function buildDossier(input: DossierInput, db: Db | null): Promise<
           unit: { status: "not_applicable" as const, requested: unit },
         }),
     g ? floodZone(g.lat, g.lng) : Promise.resolve({ status: "missing", data: null, source: null, note: "Skipped — address not geocoded." } as Section<never>),
-    g
-      ? rentcastListings(g.lat, g.lng)
-      : Promise.resolve({
-          status: rentcastConfigured() ? "missing" : "not_configured",
-          data: null,
-          source: null,
-          note: "Skipped — address not geocoded.",
-        } as Section<never>),
+    g ? mlsSubject(g.standardized, g.postal, unit) : Promise.resolve(skipped<MlsSubject>()),
+    g ? mlsNearby(g.postal, g.lat, g.lng, g.standardized, unit) : Promise.resolve(skipped<MlsListing[]>()),
   ]);
   const p = parcelRes.parcel.data;
 
@@ -221,10 +260,10 @@ export async function buildDossier(input: DossierInput, db: Db | null): Promise<
         : { status: "missing", data: null, source: salesSrc, note: "Needs the exact tax record (unit) to look up transfers." }
       : noDb("Transfer history");
 
-  const { characteristics, conflicts } = mergeCharacteristics(parcelRes.parcel, history, providerProperty);
+  const { characteristics, conflicts } = mergeCharacteristics(parcelRes.parcel, history, mlsProperty);
 
   const kind = p?.kind ?? "other";
-  const [market, comps, avm, rent] = await Promise.all([
+  const [market, comps] = await Promise.all([
     db && salesSrc && p
       ? marketStats(db, p.muncode, p.municipality, kind, p.propClass, salesSrc).catch(
           (e) => ({ status: "error", data: null, source: salesSrc, error: String(e) }) as Section<MarketStats>
@@ -235,10 +274,6 @@ export async function buildDossier(input: DossierInput, db: Db | null): Promise<
           (e) => ({ status: "error", data: null, source: salesSrc, error: String(e) }) as Section<CompsResult>
         )
       : Promise.resolve(db ? ({ status: "missing", data: null, source: salesSrc, note: "Needs a matched parcel and location." } as Section<CompsResult>) : noDb<CompsResult>("Comparable sales")),
-    rentcastAvm(oneLine, kind),
-    kind === "multifamily" || kind === "condo" || kind === "single_family"
-      ? rentcastRent(oneLine, kind)
-      : Promise.resolve({ status: "not_available", data: null, source: null, note: "Rent estimate not applicable." } as Section<never>),
   ]);
 
   const deeds = history.data ?? [];
@@ -267,18 +302,19 @@ export async function buildDossier(input: DossierInput, db: Db | null): Promise<
       status: history.status === "ok" ? "ok" : history.status,
       data: { indicators },
       source: history.source,
-      note: "From non-usable deed codes only. Mortgage, lien, lis pendens and foreclosure-filing data need a licensed provider (not configured).",
+      note: "From non-usable deed codes only. Mortgages, liens and foreclosure filings aren't in the public data — ask the seller, and order a title search before contract.",
     },
     market,
     comps,
-    provider: { property: providerProperty, avm, rent, listings },
+    mls: { subject: mlsProperty, nearby: mlsListings },
     insights: { tags: [], risks: [], missing: [], recommended: [] },
     sources: [],
   };
-  dossier.insights = buildInsights(dossier, input.lead);
-  const all = [geo, parcelRes.parcel, history, flood, market, comps, providerProperty, avm, rent, listings]
+  const withSeller = withSellerFacts(dossier, input.lead);
+  withSeller.insights = buildInsights(withSeller, input.lead);
+  const all = [geo, parcelRes.parcel, history, flood, market, comps, mlsProperty, mlsListings]
     .map((s) => s.source)
     .filter((s): s is SourceRef => Boolean(s));
-  dossier.sources = [...new Map(all.map((s) => [s.id, s])).values()];
-  return dossier;
+  withSeller.sources = [...new Map(all.map((s) => [s.id, s])).values()];
+  return withSeller;
 }

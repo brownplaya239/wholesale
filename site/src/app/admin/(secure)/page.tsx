@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { campaignFunnel, recentIngests, usageLast7 } from "@/lib/admin/data";
 import { getDb } from "@/lib/db";
+import { mlsFeeds } from "@/lib/enrich/mls";
 import { STATUS_LABEL } from "@/lib/leads/pipeline";
 import { describeSource, type LeadSource } from "@/lib/leads/source";
 import { listLeads } from "@/lib/leads/store";
@@ -22,7 +23,7 @@ const ENRICH_BADGE: Record<string, string> = {
   failed: "bg-red-100 text-red-800",
 };
 
-export default async function AdminHome({ searchParams }: { searchParams: Promise<{ ingest?: string }> }) {
+export default async function AdminHome({ searchParams }: { searchParams: Promise<{ ingest?: string; mls?: string }> }) {
   const sp = await searchParams;
   const db = await getDb();
   if (!db) {
@@ -44,6 +45,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
     campaignFunnel(db),
   ]);
   const y = new Date().getFullYear();
+  const feeds = mlsFeeds();
 
   return (
     <div className="space-y-8">
@@ -175,6 +177,20 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
               </li>
             ))}
           </ul>
+          <p className="mt-4 text-sm text-ink-soft">
+            MLS (beds/baths, listing history, nearby listings):{" "}
+            {feeds.length ? (
+              <strong>{feeds.map((f) => f.name).join(", ")}</strong>
+            ) : (
+              <strong className="text-amber-800">not connected — set the MLS_MOMLS_* / MLS_CJMLS_* variables in Vercel</strong>
+            )}
+          </p>
+          {feeds.length > 0 && (
+            <form method="post" action="/api/admin/mls-test" className="mt-2">
+              <button className="rounded-lg border border-line px-3 py-1.5 text-sm font-semibold">Test MLS connection</button>
+            </form>
+          )}
+          {sp.mls && <p className="mt-2 text-sm font-semibold text-trust">{sp.mls}</p>}
           <h3 className="mt-4 text-sm font-bold">API usage, last 7 days</h3>
           <table className="mt-1 w-full text-xs">
             <thead className="text-ink-soft">

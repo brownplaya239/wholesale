@@ -29,6 +29,8 @@ export type LeadSubmission = {
   /** Thank-you-page extras (stage "details"). */
   condition?: string;
   occupancy?: string;
+  beds?: string;
+  baths?: string;
   notes?: string;
   unit?: string;
   /** Seller-corrected street address (stage "details"). */
@@ -107,6 +109,8 @@ export type LeadExtras = Partial<{
   priority: string;
   condition: string;
   occupancy: string;
+  beds: string;
+  baths: string;
   email: string;
   notes: string;
   unit: string;

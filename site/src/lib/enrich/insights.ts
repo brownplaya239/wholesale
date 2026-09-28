@@ -16,7 +16,13 @@ export type LeadFacts = {
   occupancy: string | null;
   createdAt: string;
   photos?: number;
+  /** Seller-reported on the thank-you page, e.g. "3", "2.5", "5+". */
+  beds?: string | null;
+  baths?: string | null;
 };
+
+const CURRENTLY_LISTED = new Set(["Active", "Active Under Contract", "Pending", "Coming Soon", "Hold"]);
+const ENDED = new Set(["Expired", "Withdrawn", "Canceled", "Cancelled"]);
 
 export type Workflow = {
   track: "hot" | "standard" | "listing" | "verify";
@@ -63,6 +69,24 @@ export function buildInsights(d: Dossier | null, lead: LeadFacts): Insights {
   if (d) {
     const g = d.geocode.data;
     const p = d.parcel.data;
+    const mlsRecords = d.mls?.subject.data?.records ?? [];
+    const active = mlsRecords.find((r) => r.status && CURRENTLY_LISTED.has(r.status));
+    if (active) {
+      // NJ REC: never interfere with another broker's exclusive listing.
+      tags.push("LISTED-ELSEWHERE");
+      risks.push(
+        `Currently ${active.status === "Hold" ? "on hold" : active.status} in ${active.feed}${active.office ? ` with ${active.office}` : ""}${active.listDate ? ` since ${active.listDate}` : ""}${active.listPrice ? ` at $${active.listPrice.toLocaleString()}` : ""}. If that isn't your listing, it's an exclusive agreement with another broker — don't interfere; confirm its status and expiration before discussing a sale or listing.`
+      );
+    }
+    const ended = mlsRecords.find(
+      (r) => r.status && ENDED.has(r.status) && r.modified && Date.now() - Date.parse(r.modified) < 365 * 86_400_000
+    );
+    if (ended && !active) {
+      tags.push("EXPIRED-LISTING");
+      risks.push(
+        `MLS listing ${ended.status!.toLowerCase()} (${ended.modified!.slice(0, 10)})${ended.listPrice ? ` at $${ended.listPrice.toLocaleString()}` : ""}${ended.daysOnMarket ? ` after ${ended.daysOnMarket} days` : ""}${ended.office ? ` with ${ended.office}` : ""} — it didn't sell; ask what happened.`
+      );
+    }
     if (!g || g.match === "not_found" || g.match === "low_confidence") {
       tags.push("ADDRESS-UNVERIFIED");
       risks.push("Address couldn't be matched confidently to NJ address records — confirm it on the call.");
@@ -144,9 +168,13 @@ export function buildInsights(d: Dossier | null, lead: LeadFacts): Insights {
     else if (v.confidence === "low") risks.push("Comparable sales are sparse or distant — value range is low-confidence.");
 
     if (d.characteristics.livingSpace.value == null && p?.kind !== "land") missing.push("Living area (sq ft)");
-    if (d.characteristics.bedrooms.status !== "ok") missing.push("Bedrooms / bathrooms");
-    if (d.provider.property.status === "not_configured") missing.push("Full sale & mortgage history (licensed provider not configured)");
-    if (d.provider.listings.status === "not_configured") missing.push("Active/pending listings (MLS or licensed feed not connected)");
+    const mlsOff = !d.mls || d.mls.subject.status === "not_configured";
+    if (d.characteristics.bedrooms.status !== "ok" && p?.kind !== "land") {
+      missing.push(
+        mlsOff ? "Bedrooms / bathrooms (connect the MLS feed, or ask the seller)" : "Bedrooms / bathrooms (no MLS record — ask the seller)"
+      );
+    }
+    if (mlsOff) missing.push("Active/pending listings nearby (connect the MLS feed)");
     missing.push("Mortgage balance, liens and judgments (ask the seller; title search before contract)");
     missing.push("Zoning (no statewide NJ zoning dataset — check the municipal map)");
   } else {
@@ -164,18 +192,33 @@ export function assignWorkflow(d: Dossier | null, lead: LeadFacts, now = new Dat
   const ins = buildInsights(d, lead);
   const t = new Set(ins.tags);
   const track: Workflow["track"] =
-    t.has("ADDRESS-UNVERIFIED") || t.has("NEEDS-UNIT") ? "verify" : t.has("HOT") ? "hot" : t.has("LISTING-FIT") ? "listing" : "standard";
+    t.has("ADDRESS-UNVERIFIED") || t.has("NEEDS-UNIT") || t.has("LISTED-ELSEWHERE")
+      ? "verify"
+      : t.has("HOT")
+        ? "hot"
+        : t.has("LISTING-FIT")
+          ? "listing"
+          : "standard";
   const base: Record<Workflow["track"], string[]> = {
     hot: ["Book a walkthrough within 24 hours", "Deliver both numbers in writing within 24 hours"],
     listing: ["Lead with the listing-net estimate and a CMA", "Present the cash offer as a guaranteed floor"],
     verify: ["Confirm the exact address and unit before valuing", "Then deliver both numbers within 24–48 hours"],
     standard: ["Confirm timeline, condition and occupancy", "Deliver both numbers within 24–48 hours"],
   };
+  let steps = base[track];
+  if (t.has("LISTED-ELSEWHERE")) {
+    // NJ REC: another broker's exclusive listing is off-limits while active.
+    const listing = [
+      "Before anything else: confirm the listing agreement's status and expiration date",
+      "While it's listed with another broker, don't negotiate with the seller directly or discuss re-listing — any offer goes through their listing agent",
+    ];
+    steps = t.has("ADDRESS-UNVERIFIED") || t.has("NEEDS-UNIT") ? [...listing, base.verify[0]] : listing;
+  }
   return {
     track,
     label: TRACK_LABEL[track],
     firstTouch: firstTouch(new Date(lead.createdAt)),
-    steps: [...base[track], ...ins.recommended],
+    steps: [...steps, ...ins.recommended],
     tags: ins.tags,
     updatedAt: now.toISOString(),
   };

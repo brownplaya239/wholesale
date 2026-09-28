@@ -30,6 +30,8 @@ export type LeadRecord = {
   priority: string | null;
   condition: string | null;
   occupancy: string | null;
+  beds: string | null;
+  baths: string | null;
   notes: string | null;
   source: LeadSource | Record<string, never>;
   consent: Record<string, unknown>;
@@ -82,6 +84,8 @@ function toRecord(r: Row): LeadRecord {
     priority: (r.priority as string) ?? null,
     condition: (r.condition as string) ?? null,
     occupancy: (r.occupancy as string) ?? null,
+    beds: (r.beds as string) ?? null,
+    baths: (r.baths as string) ?? null,
     notes: (r.notes as string) ?? null,
     source: (r.source as LeadSource) ?? {},
     consent: (r.consent as Record<string, unknown>) ?? {},
@@ -111,7 +115,7 @@ export async function listLeads(db: Db, limit = 100): Promise<LeadRecord[]> {
   const rows = await db.q<Row>(
     `SELECT l.id, l.created_at, l.updated_at, l.status, l.name, l.phone, l.email, l.address_original,
             l.address_current, l.address_unit, l.place_id, l.timeline, l.priority, l.condition,
-            l.occupancy, l.notes, l.source, l.consent, '[]'::jsonb AS events, l.workflow, l.notified,
+            l.occupancy, l.beds, l.baths, l.notes, l.source, l.consent, '[]'::jsonb AS events, l.workflow, l.notified,
             l.enrichment_status, l.enrichment_attempts, l.enrichment_error, l.enriched_at,
             NULL::jsonb AS dossier, l.dossier->'comps'->'data'->'valuation' AS valuation,
             (SELECT count(*)::int FROM lead_photos p WHERE p.lead_id = l.id) AS photo_count
@@ -190,6 +194,8 @@ export type DetailsPatch = Partial<{
   email: string;
   condition: string;
   occupancy: string;
+  beds: string;
+  baths: string;
   notes: string;
   unit: string;
   address: string;
@@ -201,6 +207,8 @@ const COLUMN: Record<keyof DetailsPatch, string> = {
   email: "email",
   condition: "condition",
   occupancy: "occupancy",
+  beds: "beds",
+  baths: "baths",
   notes: "notes",
   unit: "address_unit",
   address: "address_current",
@@ -212,6 +220,8 @@ const CURRENT: Record<keyof DetailsPatch, keyof LeadRecord> = {
   email: "email",
   condition: "condition",
   occupancy: "occupancy",
+  beds: "beds",
+  baths: "baths",
   notes: "notes",
   unit: "addressUnit",
   address: "addressCurrent",

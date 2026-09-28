@@ -18,6 +18,10 @@ export const CONDITIONS = [
 
 export const OCCUPANCY = ["I live there", "Tenant-occupied", "Vacant", "Family member lives there"] as const;
 
+/** Seller-reported fallback until the MLS has a record of the property. */
+export const BEDROOMS = ["1", "2", "3", "4", "5+"] as const;
+export const BATHROOMS = ["1", "1.5", "2", "2.5", "3+"] as const;
+
 export function oneOf<T extends readonly string[]>(options: T, v: unknown): T[number] | null {
   return typeof v === "string" && (options as readonly string[]).includes(v) ? (v as T[number]) : null;
 }

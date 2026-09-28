@@ -1,3 +1,5 @@
+import type { MlsListing, MlsSubject } from "./mls";
+
 /**
  * The property dossier: everything enrichment learned about a lead's
  * property, with provenance on every section. Nothing in here is estimated
@@ -160,39 +162,6 @@ export type CompsResult = {
   note?: string;
 };
 
-export type ProviderProperty = {
-  bedrooms: number | null;
-  bathrooms: number | null;
-  squareFootage: number | null;
-  lotSize: number | null;
-  yearBuilt: number | null;
-  propertyType: string | null;
-  lastSaleDate: string | null;
-  lastSalePrice: number | null;
-  ownerOccupied: boolean | null;
-  history: { date: string; event: string; price: number | null }[];
-};
-
-export type ProviderAvm = {
-  price: number | null;
-  low: number | null;
-  high: number | null;
-  listingComps: { address: string; price: number | null; status: string | null; distance: number | null; squareFootage: number | null; date: string | null }[];
-};
-
-export type ProviderRent = { rent: number | null; low: number | null; high: number | null };
-
-export type ProviderListing = {
-  address: string;
-  price: number | null;
-  status: string | null;
-  listedDate: string | null;
-  daysOnMarket: number | null;
-  bedrooms: number | null;
-  bathrooms: number | null;
-  squareFootage: number | null;
-};
-
 export type Characteristics = {
   livingSpace: Fact<number>;
   yearBuilt: Fact<number>;
@@ -226,11 +195,10 @@ export type Dossier = {
   distress: Section<{ indicators: string[] }>;
   market: Section<MarketStats>;
   comps: Section<CompsResult>;
-  provider: {
-    property: Section<ProviderProperty>;
-    avm: Section<ProviderAvm>;
-    rent: Section<ProviderRent>;
-    listings: Section<ProviderListing[]>;
+  /** Optional: reports built before the MLS feed existed don't have it. */
+  mls?: {
+    subject: Section<MlsSubject>;
+    nearby: Section<MlsListing[]>;
   };
   insights: Insights;
   sources: SourceRef[];

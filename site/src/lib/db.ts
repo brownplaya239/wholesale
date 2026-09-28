@@ -12,7 +12,7 @@ export type Db = {
   q<T = Record<string, unknown>>(text: string, params?: unknown[]): Promise<T[]>;
 };
 
-const SCHEMA_VERSION = "3";
+const SCHEMA_VERSION = "4";
 
 const SCHEMA: string[] = [
   `CREATE TABLE IF NOT EXISTS app_meta (key text PRIMARY KEY, value text NOT NULL)`,
@@ -45,6 +45,9 @@ const SCHEMA: string[] = [
     enriched_at timestamptz,
     dossier jsonb
   )`,
+  // v4: seller-reported beds/baths (thank-you page)
+  `ALTER TABLE leads ADD COLUMN IF NOT EXISTS beds text`,
+  `ALTER TABLE leads ADD COLUMN IF NOT EXISTS baths text`,
   `CREATE INDEX IF NOT EXISTS leads_dedupe_idx ON leads (dedupe_key, created_at)`,
   `CREATE INDEX IF NOT EXISTS leads_created_idx ON leads (created_at DESC)`,
   `CREATE TABLE IF NOT EXISTS lead_photos (

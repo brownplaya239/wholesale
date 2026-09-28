@@ -4,8 +4,9 @@
  * retry and the report's "Re-run" button; lead collection is unaffected.
  */
 import { getDb } from "@/lib/db";
-import { buildDossier } from "@/lib/enrich/dossier";
-import { assignWorkflow, type LeadFacts } from "@/lib/enrich/insights";
+import { buildDossier, withSellerFacts } from "@/lib/enrich/dossier";
+import { assignWorkflow, buildInsights, type LeadFacts } from "@/lib/enrich/insights";
+import type { Dossier } from "@/lib/enrich/types";
 import { enrichedEmail, fanOut } from "./notify";
 import { claimNotification, getLead, releaseNotification, setEnrichment, type LeadRecord } from "./store";
 
@@ -20,7 +21,20 @@ export function leadFacts(l: LeadRecord): LeadFacts {
     occupancy: l.occupancy,
     createdAt: l.createdAt,
     photos: l.photoCount,
+    beds: l.beds,
+    baths: l.baths,
   };
+}
+
+/**
+ * The stored dossier brought up to date with the seller's latest answers
+ * (beds/baths, timeline… can arrive after enrichment ran). Nothing is
+ * re-fetched: seller facts are layered on and insights recomputed.
+ */
+export function currentDossier(l: LeadRecord, facts: LeadFacts = leadFacts(l)): Dossier | null {
+  if (!l.dossier) return null;
+  const d = withSellerFacts(l.dossier, facts);
+  return { ...d, insights: buildInsights(d, facts) };
 }
 
 export async function enrichLead(id: string, opts: { notify: boolean; reason: EnrichReason }): Promise<string> {

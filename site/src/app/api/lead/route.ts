@@ -8,8 +8,8 @@ import {
   normalizeUSPhone,
   type LeadSubmission,
 } from "@/lib/lead";
-import { CONDITIONS, OCCUPANCY, oneOf, PRIORITIES, TIMELINES } from "@/lib/leadOptions";
-import { enrichLead, leadFacts } from "@/lib/leads/enrich";
+import { BATHROOMS, BEDROOMS, CONDITIONS, OCCUPANCY, oneOf, PRIORITIES, TIMELINES } from "@/lib/leadOptions";
+import { currentDossier, enrichLead, leadFacts } from "@/lib/leads/enrich";
 import { fanOut, leadSubject, reportUrl } from "@/lib/leads/notify";
 import { describeSource, parseSource } from "@/lib/leads/source";
 import {
@@ -211,6 +211,10 @@ async function handleDetails(body: Partial<LeadSubmission>) {
   if (priority) patch.priority = priority;
   if (condition) patch.condition = condition;
   if (occupancy) patch.occupancy = occupancy;
+  const beds = oneOf(BEDROOMS, body.beds);
+  const baths = oneOf(BATHROOMS, body.baths);
+  if (beds) patch.beds = beds;
+  if (baths) patch.baths = baths;
   const email = clean(body.email, 200);
   if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) patch.email = email;
   const notes = clean(body.notes, 1000);
@@ -255,6 +259,8 @@ async function handleDetails(body: Partial<LeadSubmission>) {
     priority: "Priority",
     condition: "Condition",
     occupancy: "Occupancy",
+    beds: "Bedrooms (seller)",
+    baths: "Bathrooms (seller)",
     email: "Email",
     notes: "Notes",
     unit: "Unit",
@@ -285,5 +291,5 @@ async function handleDetails(body: Partial<LeadSubmission>) {
 }
 
 async function setEnrichmentWorkflow(db: Db, lead: LeadRecord): Promise<void> {
-  await setWorkflow(db, lead.id, assignWorkflow(lead.dossier, leadFacts(lead))).catch(() => {});
+  await setWorkflow(db, lead.id, assignWorkflow(currentDossier(lead), leadFacts(lead))).catch(() => {});
 }
