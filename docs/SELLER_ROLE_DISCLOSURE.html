@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HouseSoldNJ Seller Role Disclosure</title>
+<!--
+  DRAFT — for attorney and supervising-broker review before first use.
+  One page, signed by the seller before any purchase contract or listing
+  agreement. Open in a browser, click any ____ blank to fill it in, tick the
+  one box that applies, then File > Print (or Cmd/Ctrl+P) > Save as PDF.
+  Keep the signed copy with the deal file in compliance/.
+-->
+<style>
+  :root {
+    --ink: #1c2b39; --soft: #51616f; --line: #d8d2c4;
+    --cream: #faf9f6; --accent: #b45309; --trust: #15803d;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+    color: var(--ink); background: #fff; max-width: 7.6in; margin: 0 auto;
+    padding: .55in .5in; font-size: 12.5px; line-height: 1.45;
+  }
+  @media print { body { padding: .2in 0; } .noprint { display: none; } }
+  header { display: flex; justify-content: space-between; align-items: baseline;
+    border-bottom: 3px solid var(--ink); padding-bottom: 10px; }
+  .brand { font-size: 20px; font-weight: 800; }
+  .brand .mid { color: var(--accent); }
+  .meta { text-align: right; font-size: 11px; color: var(--soft); }
+  .draft { margin-top: 10px; border: 1.5px dashed var(--accent); border-radius: 6px;
+    padding: 6px 10px; font-size: 11px; color: var(--accent); font-weight: 600; }
+  h1 { font-size: 17px; margin: 14px 0 2px; }
+  h2 { font-size: 13px; margin: 14px 0 4px; }
+  .sub { color: var(--soft); font-size: 12px; margin-bottom: 6px; }
+  p, li { margin-top: 4px; }
+  ol { padding-left: 18px; }
+  [contenteditable] {
+    display: inline-block; min-width: 90px; border-bottom: 1.5px solid var(--accent);
+    padding: 0 4px; font-weight: 600; outline: none;
+  }
+  [contenteditable]:empty::before { content: "____________"; color: #b9b2a3; font-weight: 400; }
+  .role { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px;
+    margin-top: 6px; display: flex; gap: 10px; background: var(--cream); }
+  .role input { width: 16px; height: 16px; margin-top: 2px; flex-shrink: 0; }
+  .role b { display: block; }
+  .sig { margin-top: 22px; display: grid; grid-template-columns: 1fr 1fr; gap: 26px 40px;
+    font-size: 11px; color: var(--soft); }
+  .sig div { border-top: 1px solid var(--ink); padding-top: 4px; }
+  .foot { margin-top: 16px; font-size: 10px; color: var(--soft); }
+</style>
+</head>
+<body>
+  <header>
+    <div class="brand">House<span class="mid">Sold</span>NJ</div>
+    <div class="meta">
+      Sumeet Sancheti · (908) 596-0242 · sum@housesoldnj.com<br>
+      NJ Licensed Real Estate Salesperson #2082408 · Coldwell Banker Realty
+    </div>
+  </header>
+
+  <div class="draft noprint">DRAFT — have your NJ attorney and supervising broker approve this wording before first use.</div>
+
+  <h1>Seller Disclosure: Who Is Buying, and How We Are Paid</h1>
+  <p class="sub">
+    Property: <span contenteditable></span> &nbsp;·&nbsp;
+    Seller(s): <span contenteditable></span> &nbsp;·&nbsp;
+    Date: <span contenteditable></span>
+  </p>
+
+  <h2>1. License disclosure</h2>
+  <p>
+    Sumeet Sancheti is a New Jersey Licensed Real Estate Salesperson
+    (License #2082408) affiliated with Coldwell Banker Realty, Monmouth-Ocean
+    Regional Office, 335 Route 9 South, Manalapan, NJ 07726, (732) 462-4242.
+    Licensure does not imply endorsement.
+  </p>
+
+  <h2>2. Which of the following applies to this property (one box)</h2>
+  <label class="role">
+    <input type="checkbox">
+    <span><b>Direct purchase.</b>
+      <span contenteditable></span> (the "Buyer," a company of Sumeet Sancheti) is
+      buying the property for its own account with its own funds. The Buyer is
+      <u>not</u> acting as your real estate agent and does not represent your
+      interests in this purchase.</span>
+  </label>
+  <label class="role">
+    <input type="checkbox">
+    <span><b>Purchase contract to be assigned to an investor partner.</b>
+      <span contenteditable></span> (the "Buyer") is signing the purchase
+      contract, which states in writing that it will be assigned. The Buyer
+      intends to assign it to an investor who will close at the same price and
+      on the same terms you agreed to. The investor will pay the Buyer an
+      assignment fee for arranging the purchase; this fee does not reduce the
+      price paid to you. You will be told the investor's name before closing.
+      The Buyer is <u>not</u> acting as your real estate agent.
+      <!-- Attorney: confirm whether the fee amount must be disclosed:
+           Assignment fee (if disclosed): ____ -->
+    </span>
+  </label>
+  <label class="role">
+    <input type="checkbox">
+    <span><b>Listing.</b> Sumeet Sancheti will represent you as your listing
+      agent through Coldwell Banker Realty under a separate written listing
+      agreement, for a commission you negotiate. In this role Sumeet works on
+      your behalf, and neither Sumeet nor any related company will buy the property
+      or assign any contract for it unless you give separate written, informed
+      consent.</span>
+  </label>
+
+  <h2>3. Your rights</h2>
+  <ol>
+    <li>You are under no obligation to sell, to sign any contract, or to choose any option.</li>
+    <li>We recommend you have your own New Jersey real estate attorney review any contract before you sign it.</li>
+    <li>You may ask us, at any time, which of the options above applies and how we will be paid.</li>
+    <li>Your contact information is never sold to lead buyers or marketers. If a contract is assigned, the purchasing investor and the closing parties receive the details needed to close.</li>
+  </ol>
+
+  <div class="sig">
+    <div>Seller signature &amp; date</div>
+    <div>Seller signature &amp; date</div>
+    <div>Sumeet Sancheti, for House Sold NJ &amp; date</div>
+    <div>Printed name(s)</div>
+  </div>
+
+  <p class="foot">
+    This disclosure is given before any purchase contract or listing agreement
+    is signed. Keep a copy for your records.
+  </p>
+</body>
+</html>

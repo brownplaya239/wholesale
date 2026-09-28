@@ -69,6 +69,14 @@ Owner: Sum. Footprint: Monmouth, Middlesex, Somerset, Union, Hudson counties, NJ
 - NJ purchase contracts are not automatically assignable — express assignment clause
   required; attorney-drafted PSA (avoids the 3-day attorney-review window that
   attaches to realtor-form contracts).
+- Three deal paths, chosen buyer-first: great deal → buy directly; OK deal →
+  assign the contract to an investor partner; not an investor deal → list it
+  as the seller's agent through Coldwell Banker. The seller learns which in
+  writing before signing (docs/SELLER_ROLE_DISCLOSURE.html, attorney-review
+  draft). Site copy must never claim a direct purchase unconditionally —
+  `site/src/components/RoleDisclosure.tsx` is the canonical wording. Never
+  start as listing agent and then buy or assign without separate written,
+  informed consent.
 - Every dial/scrub/consent event gets logged to `compliance/` before outreach scales.
 
 ## Conventions

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import RoleDisclosure from "@/components/RoleDisclosure";
 import LeadForm from "@/components/LeadForm";
 import { AboutSum, IntroVideo, Section, SectionTitle } from "@/components/Sections";
 import { entityName, site } from "@/config/site";
@@ -59,6 +60,7 @@ export default function AboutPage() {
             process.
           </li>
         </ul>
+        <RoleDisclosure className="mx-auto mt-6 max-w-xl" />
       </Section>
 
       <Section>

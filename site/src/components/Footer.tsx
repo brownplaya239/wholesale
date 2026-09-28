@@ -96,10 +96,11 @@ export default function Footer({ minimal = false }: { minimal?: boolean }) {
             <LicensureNote />
           </p>
           <p>
-            {entityName()} buys houses directly as principal. Brokerage
-            services, when requested, are provided separately through{" "}
-            {site.principal.brokerage}. All cash offers are made in writing
-            with proof of funds, on attorney-reviewed NJ contracts.
+            Depending on the property, {entityName()} may buy it directly,
+            assign the purchase contract to an investor partner, or list it
+            for you through {site.principal.brokerage} — you'll know which, in
+            writing, before you sign anything. All cash offers are made in
+            writing with proof of funds, on attorney-reviewed NJ contracts.
           </p>
           <p className="pt-1.5">
             © {new Date().getFullYear()} {entityName()} ·{" "}

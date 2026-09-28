@@ -61,7 +61,7 @@ export default function ThankYouPage() {
                 3 · Get both numbers — typically within 24 hours
               </p>
               <p className="mt-1 text-sm text-ink-soft">
-                A written cash offer with proof of funds for us to purchase
+                A written cash offer with proof of funds to purchase
                 the property — and an MLS data-driven listing proposal:
                 comparable sales, an accurately priced estimate of what you'd
                 likely net by listing, and roughly how long it would take to

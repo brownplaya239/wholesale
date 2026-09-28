@@ -11,7 +11,8 @@ const EXAMPLE = {
   repairs: 35_000,
   /** 70% of fixed-up value, minus repairs. */
   cashOffer: 262_500,
-  cashClosingCosts: 3_000,
+  /** "Typical seller closing costs covered" — see HonestBroker. */
+  cashClosingCosts: 0,
   /** Negotiable — shown only to illustrate the math. */
   commissionRate: 0.05,
   listClosingCosts: 6_000,
@@ -97,7 +98,7 @@ export default function NetExample() {
             { label: "Written cash offer", amount: e.cashOffer },
             { label: "Repairs & cleanout", amount: 0 },
             { label: "Agent commission", amount: 0 },
-            { label: "Your closing costs", note: "NJ transfer fee, attorney (est.)", amount: -e.cashClosingCosts },
+            { label: "Your typical closing costs", note: "Covered in the cash sale", amount: -e.cashClosingCosts },
           ]}
           net={cashNet}
           facts={[

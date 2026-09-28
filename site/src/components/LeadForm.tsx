@@ -176,8 +176,8 @@ export default function LeadForm({ idPrefix = "lead" }: { idPrefix?: string }) {
             Get My Cash Offer &amp; Listing Estimate →
           </button>
           <p className="mt-2.5 text-center text-xs text-ink-soft">
-            Takes 30 seconds · No obligation · Never sold or sent to other
-            investors
+            Takes 30 seconds · No obligation · Your info is never sold to lead
+            buyers or marketers
           </p>
         </form>
       ) : (

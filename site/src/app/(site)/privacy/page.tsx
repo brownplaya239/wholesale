@@ -49,10 +49,11 @@ export default function PrivacyPage() {
 
         <h2 className="text-lg font-bold text-ink">What we never do</h2>
         <p>
-          We never sell your information. We never share it with other
-          investors, lead brokers, or marketers. Your information is seen by{" "}
-          {entityName()} and the service providers who operate this site's
-          forms, email, and phone systems on our behalf.
+          We never sell your information to lead buyers or marketers. Your
+          information is seen by {entityName()} and the service providers who
+          operate this site's forms, email, and phone systems on our behalf.
+          If your contract is assigned, the purchasing investor and the
+          closing parties receive the details needed to close.
         </p>
 
         <h2 className="text-lg font-bold text-ink">Your choices</h2>

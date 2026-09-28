@@ -40,8 +40,13 @@ export default function TermsPage() {
           {site.principal.fullName} is a {site.principal.licenseLine}
           {site.principal.brokerage && <> with {site.principal.brokerage}</>}
           {site.principal.licenseNumber && <> (License #{site.principal.licenseNumber})</>}
-          , and may purchase property as a principal. License status is
-          disclosed at first contact and in any contract. <LicensureNote />
+          . Depending on the property, {site.name} may purchase it as a
+          principal, contract to purchase it and assign that contract to an
+          investor partner who pays us a fee, or {site.principal.firstName}{" "}
+          may list it through {site.principal.brokerage}. Which applies is
+          disclosed in writing before any contract is signed, and license
+          status is disclosed at first contact and in any contract.{" "}
+          <LicensureNote />
         </p>
 
         <h2 className="text-lg font-bold text-ink">Accuracy</h2>

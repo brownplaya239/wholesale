@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import LeadForm from "@/components/LeadForm";
-import LicensureNote from "@/components/Licensure";
 import PhoneLink from "@/components/PhoneLink";
+import RoleDisclosure from "@/components/RoleDisclosure";
 import { AboutSum, HonestBroker, Section, SectionTitle } from "@/components/Sections";
-import { entityName, site } from "@/config/site";
+import { site } from "@/config/site";
 
 export const metadata: Metadata = {
   title: "Did You Get a Letter From Us?",
@@ -52,19 +52,14 @@ export default function GotALetterPage() {
               the letter and we wish you well.
             </p>
           </div>
-          <div className="rounded-2xl border border-line bg-white p-5">
-            <p className="font-bold">Who's actually asking</p>
-            <p className="mt-1 text-sm text-ink-soft">
-              {entityName()} buys houses directly as principal. Sumeet
-              Sancheti is also a NJ Licensed Real Estate Salesperson (License
-              #{site.principal.licenseNumber}) with{" "}
-              {site.principal.brokerage}; brokerage services, when requested,
-              are provided separately. Verify both on our{" "}
+          <div>
+            <RoleDisclosure />
+            <p className="mt-2 px-1 text-sm text-ink-soft">
+              Verify the license and brokerage on our{" "}
               <Link href="/reviews" className="font-semibold text-ink underline">
                 Verify Us
               </Link>{" "}
-              page — it links to the state's own license database.{" "}
-              <LicensureNote />
+              page — it links to the state's own license database.
             </p>
           </div>
           <div className="rounded-2xl border border-line bg-white p-5">

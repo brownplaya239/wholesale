@@ -1,4 +1,5 @@
 import LicensureNote from "@/components/Licensure";
+import RoleDisclosure from "@/components/RoleDisclosure";
 import PhoneLink from "@/components/PhoneLink";
 import { site } from "@/config/site";
 
@@ -37,7 +38,7 @@ export function HonestBroker() {
       <SectionTitle>Two ways we can help — you choose</SectionTitle>
       <p className="mx-auto mb-8 max-w-2xl text-center text-ink-soft">
         {site.principal.firstName} is a licensed NJ real estate agent who also
-        buys homes directly. You'll see both options side by side so you can
+        buys homes. You'll see both options side by side so you can
         choose what makes the most sense for you.
       </p>
       <div className="grid gap-4 sm:grid-cols-2">
@@ -77,12 +78,7 @@ export function HonestBroker() {
       <p className="mt-8 text-center text-lg font-bold tracking-tight">
         One conversation. Two numbers. You decide.
       </p>
-      <p className="mx-auto mt-4 max-w-2xl text-center text-xs leading-relaxed text-ink-soft">
-        In a cash purchase, {site.name} acts as the buyer for its own account —
-        not as your real estate agent. If you choose to list, brokerage
-        services are provided separately through {site.principal.brokerage}{" "}
-        under a written brokerage agreement. <LicensureNote />
-      </p>
+      <RoleDisclosure className="mx-auto mt-6 max-w-2xl" />
     </Section>
   );
 }
