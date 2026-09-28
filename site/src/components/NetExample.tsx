@@ -13,10 +13,12 @@ const EXAMPLE = {
   cashOffer: 300_000,
   /** "Typical seller closing costs covered" — see HonestBroker. */
   cashClosingCosts: 0,
+  /** Sold as-is on the MLS: buyers discount a bit beyond the repair cost. */
+  listPriceAsIs: 440_000,
   /** Negotiable — shown only to illustrate the math. */
   commissionRate: 0.05,
-  listClosingCosts: 10_000,
-  carryingMonths: 5,
+  listClosingCosts: 9_000,
+  carryingMonths: 3,
   carryingPerMonth: 3_000,
 };
 
@@ -76,18 +78,19 @@ function Column({
 
 export default function NetExample() {
   const e = EXAMPLE;
-  const commission = Math.round(e.valueFixedUp * e.commissionRate);
+  const commission = Math.round(e.listPriceAsIs * e.commissionRate);
   const carrying = e.carryingMonths * e.carryingPerMonth;
   const cashNet = e.cashOffer - e.cashClosingCosts;
-  const listNet = e.valueFixedUp - e.repairs - commission - e.listClosingCosts - carrying;
+  const listNet = e.listPriceAsIs - commission - e.listClosingCosts - carrying;
   const gap = listNet - cashNet;
 
   return (
     <Section tinted>
       <SectionTitle>What "both numbers" looks like</SectionTitle>
       <p className="mx-auto max-w-2xl text-center text-ink-soft">
-        A hypothetical NJ house worth about {usd(e.valueFixedUp)} fixed up,
-        needing about {usd(e.repairs)} of work.
+        A hypothetical NJ house that needs about {usd(e.repairs)} of work —
+        worth about {usd(e.valueFixedUp)} fixed up, or about{" "}
+        {usd(e.listPriceAsIs)} as-is on the market.
       </p>
       <p className="mx-auto mt-2 w-fit rounded-full bg-cream px-3 py-1 text-xs font-semibold text-ink-soft">
         Illustrative example — not an offer
@@ -111,11 +114,10 @@ export default function NetExample() {
           ]}
         />
         <Column
-          title="Fix up, then list"
-          subtitle="On the open market with an agent"
+          title="Sell as-is on the MLS"
+          subtitle="Listed on the open market with an agent"
           lines={[
-            { label: "Sale price after repairs", amount: e.valueFixedUp },
-            { label: "Repairs before listing", note: "Paid by you, up front", amount: -e.repairs },
+            { label: "Sale price as-is", note: "What buyers typically pay for this condition", amount: e.listPriceAsIs },
             {
               label: "Agent commission",
               note: `Negotiable — ${Math.round(e.commissionRate * 100)}% used for illustration`,
@@ -130,9 +132,9 @@ export default function NetExample() {
           ]}
           net={listNet}
           facts={[
-            `Typically ${e.carryingMonths - 1}–${e.carryingMonths + 1} months from start to closing`,
-            `About ${usd(e.repairs)} out of pocket before you sell`,
-            "Repair overruns and inspection renegotiations come out of your net",
+            `Typically ${e.carryingMonths - 1}–${e.carryingMonths + 1} months from listing to closing`,
+            "Showings, open houses, and keeping the house market-ready",
+            "Buyer inspection and financing can reopen the price — or fall through",
           ]}
         />
       </div>
@@ -140,12 +142,14 @@ export default function NetExample() {
       <div className="mx-auto mt-5 max-w-3xl rounded-2xl border border-line bg-panel p-5 text-center">
         <p className="font-bold">
           In this example, listing nets about {usd(gap)} more — in exchange
-          for months of time, money up front, and the risk.
+          for a few months on the market, showings, and the risk the sale
+          falls through.
         </p>
         <p className="mx-auto mt-1.5 max-w-2xl text-sm text-ink-soft">
-          Neither is always right. For a house in good shape, listing usually
-          wins. For a house that needs work, a tight timeline, or a situation
-          you just want finished, cash often does. That's why you get both
+          Neither is always right. If you have time and the house can get
+          through a buyer's inspection and financing, listing usually nets
+          more. If you need speed, certainty, or a situation you just want
+          finished, cash often makes more sense. That's why you get both
           numbers for your actual house — and a straight answer about which
           makes more sense.
         </p>
