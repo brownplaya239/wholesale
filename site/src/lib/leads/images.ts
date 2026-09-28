@@ -151,8 +151,12 @@ async function googleStatic(kind: "satellite" | "map", lat: number, lng: number,
   const q = new URLSearchParams({ size: `${W}x${H}`, maptype: kind === "satellite" ? "satellite" : "roadmap", key });
   q.append("markers", `size:small|color:red|${lat},${lng}`);
   if (rings?.length) q.append("path", `color:0xffd400ff|weight:3|fillcolor:0xffd40020|${pathPoints(rings)}`);
-  // Frame like the fallback: the lot plus its surroundings.
-  q.append("visible", `${latOf(e.ymin)},${lngOf(e.xmin)}|${latOf(e.ymax)},${lngOf(e.xmax)}`);
+  // Explicit center/zoom: Google's auto-fit won't zoom in past neighborhood
+  // level. Largest zoom whose view still covers the frame.
+  const mPerPx = (e.xmax - e.xmin) / W;
+  const zoom = Math.max(12, Math.min(20, Math.floor(Math.log2(156543.03392 / mPerPx))));
+  q.set("center", `${latOf((e.ymin + e.ymax) / 2).toFixed(6)},${lngOf((e.xmin + e.xmax) / 2).toFixed(6)}`);
+  q.set("zoom", String(zoom));
   return get(`https://maps.googleapis.com/maps/api/staticmap?${q}`);
 }
 
@@ -173,7 +177,8 @@ export async function renderImage(
     const body = await get(`https://maps.googleapis.com/maps/api/streetview?size=${W}x${H}&location=${lat},${lng}&source=outdoor&fov=80&key=${key}`);
     return body ? { body, type: "image/jpeg", source: "Google Street View" } : null;
   }
-  let e = kind === "satellite" ? frame(lat, lng, rings, 2.4, 90) : frame(lat, lng, rings, 12, 1100);
+  // Satellite: the lot and its neighbors (~150 m); road map: ~1 km of streets.
+  let e = kind === "satellite" ? frame(lat, lng, rings, 2.4, 150) : frame(lat, lng, rings, 12, 1100);
   const g = await googleStatic(kind, lat, lng, rings, e);
   if (g) return { body: g, type: "image/png", source: "Google" };
   // Esri imagery can't zoom past ~0.35 m/pixel: frame at least ~220 m across.
