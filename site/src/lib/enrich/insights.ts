@@ -174,6 +174,10 @@ export function buildInsights(d: Dossier | null, lead: LeadFacts): Insights {
     if (!v) risks.push("No comparable-sales value range could be computed.");
     else if (v.confidence === "low") risks.push("Comparable sales are sparse or distant — value range is low-confidence.");
 
+    if (p && !p.owner.name) {
+      // The state parcel file withholds owner names, so authority to sell can't be checked from data.
+      missing.push("Owner of record — names are withheld from the state parcel data; confirm the seller is on the deed");
+    }
     if (d.characteristics.livingSpace.value == null && p?.kind !== "land") missing.push("Living area (sq ft)");
     const mlsOff = !d.mls || d.mls.subject.status === "not_configured";
     if (d.characteristics.bedrooms.status !== "ok" && p?.kind !== "land") {
