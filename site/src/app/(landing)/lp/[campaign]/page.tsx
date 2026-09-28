@@ -81,7 +81,7 @@ export default async function LandingPage({
             href="#top-form"
             className="btn inline-flex items-center justify-center rounded-lg bg-accent px-8 py-4 text-lg font-bold text-white transition-colors hover:bg-accent-hover"
           >
-            Get My Fair Cash Offer →
+            Get My Cash Offer &amp; Listing Estimate →
           </a>
         </p>
       </Section>

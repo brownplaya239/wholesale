@@ -1,6 +1,7 @@
 import Link from "next/link";
 import FaqBlock from "@/components/Faq";
 import Hero from "@/components/Hero";
+import NetExample from "@/components/NetExample";
 import {
   AboutSum,
   HonestBroker,
@@ -18,7 +19,10 @@ import { situations } from "@/data/situations";
 export default function HomePage() {
   return (
     <>
-      <Hero headline="Sell Your House Fast in New Jersey" idPrefix="home" />
+      <Hero
+        headline="Sell Your NJ House As-Is — and See Both Your Options"
+        idPrefix="home"
+      />
 
       <Section tinted>
         <SectionTitle>How it works</SectionTitle>
@@ -36,6 +40,8 @@ export default function HomePage() {
       </Section>
 
       <HonestBroker />
+
+      <NetExample />
 
       <OfferMath />
 

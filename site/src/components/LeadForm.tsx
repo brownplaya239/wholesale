@@ -173,7 +173,7 @@ export default function LeadForm({ idPrefix = "lead" }: { idPrefix?: string }) {
             type="submit"
             className="mt-3 w-full rounded-lg bg-accent px-6 py-4 text-lg font-bold text-white transition-colors hover:bg-accent-hover"
           >
-            Get My Fair Cash Offer →
+            Get My Cash Offer &amp; Listing Estimate →
           </button>
           <p className="mt-2.5 text-center text-xs text-ink-soft">
             Takes 30 seconds · No obligation · Never sold or sent to other
