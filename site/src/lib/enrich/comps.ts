@@ -17,6 +17,7 @@ export type Subject = {
   yearBuilt: number | null;
   acres: number | null;
   dwellings: number | null;
+  beds?: number | null;
 };
 
 export type CompCandidate = {
@@ -35,6 +36,9 @@ export type CompCandidate = {
   lng: number | null;
   dwellings: number | null;
   acres: number | null;
+  beds?: number | null;
+  baths?: number | null;
+  source?: "deed" | "mls" | "deed+mls";
 };
 
 type Step = { days: number; miles: number | null; sameBuilding?: boolean; label: string };
@@ -89,6 +93,8 @@ export function isSimilar(s: Subject, c: CompCandidate): boolean {
     if (r < 0.65 || r > 1.35) return false;
   }
   if (s.yearBuilt && c.yearBuilt && s.kind !== "land" && Math.abs(c.yearBuilt - s.yearBuilt) > 40) return false;
+  // A 5-bedroom isn't comparable to a 3-bedroom, whatever the square footage.
+  if ((s.kind === "single_family" || s.kind === "condo") && s.beds && c.beds && Math.abs(c.beds - s.beds) >= 2) return false;
   return true;
 }
 
@@ -105,6 +111,10 @@ function describe(s: Subject, c: CompCandidate, distanceMi: number | null, same:
     const diff = c.yearBuilt - s.yearBuilt;
     if (Math.abs(diff) >= 5) d.push(`Built ${Math.abs(diff)} yrs ${diff > 0 ? "newer" : "older"}`);
   }
+  if (s.beds && c.beds && s.kind !== "land" && s.kind !== "multifamily") {
+    const diff = c.beds - s.beds;
+    d.push(diff === 0 ? "Same bedrooms" : `${diff > 0 ? "+" : "−"}${Math.abs(diff)} bd`);
+  }
   if (s.kind === "multifamily" && c.dwellings) d.push(`${c.dwellings} units`);
   if (s.kind === "land" && s.acres && c.acres) d.push(`${c.acres.toFixed(2)} ac vs ${s.acres.toFixed(2)} ac`);
   return d;
@@ -118,6 +128,7 @@ function scoreOf(s: Subject, c: CompCandidate, distanceMi: number | null, maxMi:
   if (s.yearBuilt && c.yearBuilt) score += (Math.abs(c.yearBuilt - s.yearBuilt) / 30) * 15;
   score += (ageDays / 730) * 15;
   if (same) score -= 25;
+  if (s.beds && c.beds && s.kind !== "land") score += Math.abs(c.beds - s.beds) * 8;
   // Taxes and schools follow the municipality, not the mile radius.
   if (c.muncode !== s.muncode) score += 8;
   if (s.kind === "multifamily" && s.dwellings && c.dwellings && c.dwellings !== s.dwellings) score += 10;
@@ -238,6 +249,9 @@ export function selectComps(s: Subject, candidates: CompCandidate[], now = new D
       pricePerUnit: c.dwellings && c.dwellings >= 2 ? Math.round(c.price / c.dwellings) : null,
       pricePerAcre: c.acres && c.acres >= 0.05 ? Math.round(c.price / c.acres) : null,
       sameBuilding: same,
+      beds: c.beds ?? null,
+      baths: c.baths ?? null,
+      source: c.source ?? "deed",
       differences: describe(s, c, distanceMi, same),
       score: scoreOf(s, c, distanceMi, maxMi, ageDays, same),
       lat: c.lat,
@@ -282,5 +296,32 @@ export function selectComps(s: Subject, candidates: CompCandidate[], now = new D
     radiusMi: usedRadius,
     valuation: comps.length ? valuate(s, comps, window, usedRadius) : null,
     note: comps.length < 3 ? "Fewer than 3 comparable sales found even after expanding the search." : undefined,
+  };
+}
+
+const STEP_DOWN: Record<Valuation["confidence"], Valuation["confidence"]> = { high: "medium", medium: "low", low: "low" };
+
+/**
+ * Checks the comp range against the property's own recent arm's-length sale
+ * (the strongest single piece of value evidence). The range stays comps-only;
+ * a sale outside it lowers the confidence one step.
+ */
+export function reconcileOwnSale(
+  v: Valuation,
+  sale: { price: number; date: string; source: string } | null
+): Valuation {
+  if (!sale) return v;
+  const inRange = sale.price >= v.low && sale.price <= v.high;
+  const $ = `$${sale.price.toLocaleString()}`;
+  return {
+    ...v,
+    confidence: inRange ? v.confidence : STEP_DOWN[v.confidence],
+    reasons: [
+      ...v.reasons,
+      inRange
+        ? `Consistent with this property's own sale (${$}, ${sale.date})`
+        : `This property sold for ${$} on ${sale.date} (${sale.source}) — ${sale.price < v.low ? "below" : "above"} the comp range; confidence lowered`,
+    ],
+    ownSale: { ...sale, inRange },
   };
 }

@@ -505,6 +505,7 @@ export default async function LeadReport({
                     <th>Price</th>
                     <th>Sq ft</th>
                     <th>$/sq ft</th>
+                    <th>Bd / ba</th>
                     <th>Built</th>
                     <th>Distance</th>
                     <th>Differences</th>
@@ -516,7 +517,7 @@ export default async function LeadReport({
                       <td className="py-1.5 pr-2">
                         <span className="font-semibold">{x.address}</span>
                         <span className="block text-xs text-ink-soft">
-                          {x.municipality ?? ""} · {x.pin}
+                          {x.municipality ?? ""} · {x.source === "mls" ? "MLS closing" : x.source === "deed+mls" ? `deed + MLS · ${x.pin}` : x.pin}
                         </span>
                       </td>
                       <td className="whitespace-nowrap pr-2">{x.saleDate}</td>
@@ -527,6 +528,7 @@ export default async function LeadReport({
                         {x.pricePerUnit && <span className="block text-xs text-ink-soft">{money(x.pricePerUnit)}/unit</span>}
                         {x.pricePerAcre && c.kind === "land" && <span className="block text-xs text-ink-soft">{money(x.pricePerAcre)}/ac</span>}
                       </td>
+                      <td className="pr-2 whitespace-nowrap">{x.beds != null || x.baths != null ? `${x.beds ?? "?"} / ${x.baths ?? "?"}` : "—"}</td>
                       <td className="pr-2">{x.yearBuilt ?? "—"}</td>
                       <td className="pr-2">{x.distanceMi != null ? `${x.distanceMi} mi` : "—"}</td>
                       <td className="text-xs text-ink-soft">{x.differences.join(" · ")}</td>
@@ -536,7 +538,10 @@ export default async function LeadReport({
               </table>
             </div>
             <p className="mt-2 text-xs text-ink-soft">
-              Search: {c.steps.map((s) => `${s.label} (${s.qualifying})`).join(" → ")}. Closed arm's-length sales only.
+              Search: {c.steps.map((s) => `${s.label} (${s.qualifying})`).join(" → ")}.{" "}
+              {c.pool
+                ? `Pool: ${c.pool.deed} arm's-length deed sales${c.pool.merged ? ` (${c.pool.merged} matched to MLS closings for beds/baths)` : ""}${c.pool.mls ? ` + ${c.pool.mls} MLS-only closings` : ""}.`
+                : "Closed arm's-length sales only."}
             </p>
             <SourceTag source={d!.comps.source} />
           </>
@@ -572,6 +577,12 @@ export default async function LeadReport({
               <p className="text-sm">
                 Midpoint {money(v.mid)} · <strong>{v.confidence} confidence</strong>
               </p>
+              {v.ownSale && (
+                <p className={`mt-2 rounded-lg px-2 py-1 text-sm ${v.ownSale.inRange ? "bg-green-50 text-green-900" : "bg-red-50 text-red-900"}`}>
+                  This property sold {v.ownSale.date} for <strong>{money(v.ownSale.price)}</strong> ({v.ownSale.source}) —{" "}
+                  {v.ownSale.inRange ? "consistent with the range." : `${v.ownSale.price < v.low ? "below" : "above"} the range; weigh that sale heavily.`}
+                </p>
+              )}
               <p className="mt-2 text-xs text-ink-soft">Method: {v.method}. Computed only from the comparable sales above.</p>
               <ul className="mt-2 list-inside list-disc text-xs text-ink-soft">
                 {v.reasons.map((r) => (

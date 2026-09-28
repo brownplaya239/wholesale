@@ -347,26 +347,53 @@ const MUNICIPALITIES =
   "https://services2.arcgis.com/XVOqAjTOJ5P6ngMu/ArcGIS/rest/services/NJ_Municipalities_3857/FeatureServer/0";
 
 /** Municipality codes within `miles` of a point (for comp expansion). */
+export type MuniShape = { code: string; name: string; rings: [number, number][][] };
+
+/** Municipalities within `miles` of a point, with simplified outlines. */
+export async function municipalitiesNear(lat: number, lng: number, miles: number): Promise<MuniShape[]> {
+  const json = await fetchJson<{
+    features?: { attributes: { MUN_CODE: string; MUN?: string }; geometry?: { rings?: [number, number][][] } }[];
+  }>("nj_municipalities", `${MUNICIPALITIES}/query`, {
+    form: {
+      geometry: JSON.stringify({ x: lng, y: lat }),
+      geometryType: "esriGeometryPoint",
+      inSR: "4326",
+      spatialRel: "esriSpatialRelIntersects",
+      distance: String(miles),
+      units: "esriSRUnit_StatuteMile",
+      outFields: "MUN_CODE,MUN",
+      returnGeometry: "true",
+      outSR: "4326",
+      // ~30 m simplification: plenty to place a house in a town.
+      maxAllowableOffset: "0.0003",
+      geometryPrecision: "5",
+      f: "json",
+    },
+    validate: arcgisValidate,
+    cacheKey: `nj_municipalities_shapes:${lat.toFixed(3)},${lng.toFixed(3)}:${miles}`,
+    cacheTtlSec: 90 * 86_400,
+  });
+  return (json.features ?? [])
+    .map((f) => ({ code: s(f.attributes.MUN_CODE), name: s(f.attributes.MUN), rings: f.geometry?.rings ?? [] }))
+    .filter((m) => m.code);
+}
+
 export async function muncodesNear(lat: number, lng: number, miles: number): Promise<string[]> {
-  const json = await fetchJson<{ features?: { attributes: { MUN_CODE: string } }[] }>(
-    "nj_municipalities",
-    `${MUNICIPALITIES}/query`,
-    {
-      form: {
-        geometry: JSON.stringify({ x: lng, y: lat }),
-        geometryType: "esriGeometryPoint",
-        inSR: "4326",
-        spatialRel: "esriSpatialRelIntersects",
-        distance: String(miles),
-        units: "esriSRUnit_StatuteMile",
-        outFields: "MUN_CODE",
-        returnGeometry: "false",
-        f: "json",
-      },
-      validate: arcgisValidate,
-      cacheKey: `nj_municipalities:${lat.toFixed(3)},${lng.toFixed(3)}:${miles}`,
-      cacheTtlSec: 90 * 86_400,
+  return (await municipalitiesNear(lat, lng, miles)).map((m) => m.code);
+}
+
+/** Which municipality a point falls in (even-odd rule across all rings). */
+export function municipalityAt(lat: number, lng: number, munis: MuniShape[]): MuniShape | null {
+  for (const m of munis) {
+    let inside = false;
+    for (const ring of m.rings) {
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [xi, yi] = ring[i];
+        const [xj, yj] = ring[j];
+        if (yi > lat !== yj > lat && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside;
+      }
     }
-  );
-  return (json.features ?? []).map((f) => s(f.attributes.MUN_CODE)).filter(Boolean);
+    if (inside) return m;
+  }
+  return null;
 }

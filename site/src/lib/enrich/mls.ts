@@ -12,7 +12,7 @@
  *   [MLS_<ID>_SCOPE]        OAuth2 client-credentials (Trestle, Rapattoni…)
  */
 import { fetchJson, nowIso, ProviderError } from "./http";
-import type { Section, SourceRef } from "./types";
+import type { PropertyKind, Section, SourceRef } from "./types";
 
 export type MlsListing = {
   feed: string;
@@ -27,6 +27,8 @@ export type MlsListing = {
   sqft: number | null;
   yearBuilt: number | null;
   lotAcres: number | null;
+  /** Units in the building (multifamily). */
+  units: number | null;
   listPrice: number | null;
   closePrice: number | null;
   closeDate: string | null;
@@ -165,7 +167,7 @@ const SELECT = [
   "BathroomsTotalInteger", "BathroomsFull", "BathroomsHalf", "LivingArea", "YearBuilt",
   "LotSizeAcres", "ListPrice", "ClosePrice", "CloseDate", "OnMarketDate", "ListingContractDate",
   "DaysOnMarket", "ListOfficeName", "ListAgentFullName", "Latitude", "Longitude",
-  "ModificationTimestamp",
+  "ModificationTimestamp", "NumberOfUnitsTotal",
 ].join(",");
 
 /**
@@ -225,6 +227,7 @@ export function toListing(feedName: string, r: Record<string, unknown>): MlsList
     sqft: num(r.LivingArea),
     yearBuilt: num(r.YearBuilt),
     lotAcres: num(r.LotSizeAcres),
+    units: num(r.NumberOfUnitsTotal),
     listPrice: num(r.ListPrice),
     closePrice: num(r.ClosePrice),
     closeDate: day(r.CloseDate),
@@ -400,6 +403,73 @@ export async function mlsNearby(
     data: list,
     source: src,
     note: `Active, under-contract, pending and coming-soon listings in ZIP ${zip}${list.some((l) => l.distanceMi != null) ? " within 1.5 mi" : ""}.`,
+  };
+}
+
+/**
+ * Maps an MLS listing onto the tax-list property kinds the comp engine uses.
+ * null = not a comparable sale (leases, commercial, unknown).
+ */
+export function mlsKind(l: Pick<MlsListing, "propertyType">): PropertyKind | null {
+  const t = (l.propertyType ?? "").toLowerCase();
+  if (!t || /lease|rental|commercial|business|farm/.test(t)) return null;
+  if (/\bland\b|\blots?\b|acreage/.test(t)) return "land";
+  if (/income|multi|duplex|triplex|quadruplex|2 family|two family|3 family|4 family/.test(t)) return "multifamily";
+  if (/condo|townho|co-?op|cooperative/.test(t)) return "condo";
+  if (/manufactured|mobile/.test(t)) return "other";
+  if (/single family|detached/.test(t) || /^residential$/.test(t.trim())) return "single_family";
+  return null;
+}
+
+/**
+ * Closed MLS sales around a point — comps that are current to today (the
+ * state deed file lags months) and carry beds/baths. Bounding box first;
+ * servers that can't filter on coordinates fall back to the ZIP code.
+ */
+export async function mlsClosedSales(
+  lat: number,
+  lng: number,
+  postalCode: string | null,
+  miles: number,
+  sinceDays: number
+): Promise<Section<MlsListing[]>> {
+  const feeds = mlsFeeds();
+  if (!feeds.length) return notConfigured("MLS closed sales");
+  const src = source(feeds);
+  const dLat = miles / 69;
+  const dLng = miles / (69 * Math.cos((lat * Math.PI) / 180));
+  const since = new Date(Date.now() - sinceDays * 86_400_000).toISOString().slice(0, 10);
+  const closed = `StandardStatus eq 'Closed' and CloseDate ge ${since}`;
+  const box = `Latitude ge ${(lat - dLat).toFixed(5)} and Latitude le ${(lat + dLat).toFixed(5)} and Longitude ge ${(lng - dLng).toFixed(5)} and Longitude le ${(lng + dLng).toFixed(5)}`;
+  const zip = postalCode?.slice(0, 5).replace(/'/g, "");
+  const found = new Map<string, MlsListing>();
+  const errors: string[] = [];
+  await Promise.all(
+    feeds.map(async (feed) => {
+      try {
+        const rows = await query(
+          feed,
+          [`${closed} and ${box}`, ...(zip ? [`${closed} and PostalCode eq '${zip}'`] : [])],
+          { $orderby: "CloseDate desc", $top: "500" },
+          6 * 3600
+        );
+        for (const r of rows) {
+          const l = toListing(feed.name, r);
+          if (!l.closePrice || !l.closeDate) continue;
+          if (l.lat != null && l.lng != null) l.distanceMi = Math.round(haversine(lat, lng, l.lat, l.lng) * 100) / 100;
+          found.set(`${l.address}|${l.unit ?? ""}|${l.closeDate}`, l);
+        }
+      } catch (err) {
+        errors.push(`${feed.id}: ${String(err)}`);
+      }
+    })
+  );
+  if (!found.size && errors.length === feeds.length) return { status: "error", data: null, source: src, error: errors.join("; ") };
+  return {
+    status: found.size ? "ok" : "missing",
+    data: [...found.values()],
+    source: src,
+    note: errors.length ? `Some feeds failed: ${errors.join("; ")}` : undefined,
   };
 }
 

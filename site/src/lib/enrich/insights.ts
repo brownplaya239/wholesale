@@ -52,7 +52,7 @@ export function firstTouch(at: Date): string {
     : "Arrived outside 8 AM–9 PM — text at 8:00 AM ET, call by 9:00 AM ET";
 }
 
-function lastNameMatches(sellerName: string, ownerName: string): boolean {
+export function lastNameMatches(sellerName: string, ownerName: string): boolean {
   const last = sellerName.trim().split(/\s+/).at(-1)?.toUpperCase() ?? "";
   return last.length > 1 && ownerName.toUpperCase().includes(last);
 }
@@ -147,7 +147,14 @@ export function buildInsights(d: Dossier | null, lead: LeadFacts): Insights {
     const recentMarketSale = deeds.find(
       (x) => x.usable && x.price && x.date && Date.now() - Date.parse(x.date) < 365 * 86_400_000
     );
-    if (recentMarketSale) {
+    const own = d.comps.data?.valuation?.ownSale;
+    if (own) {
+      risks.push(
+        own.inRange
+          ? `This property sold on ${own.date} for $${own.price.toLocaleString()} (${own.source}) — consistent with the comp range.`
+          : `This property sold on ${own.date} for $${own.price.toLocaleString()} (${own.source}) — ${own.price < d.comps.data!.valuation!.low ? "below" : "above"} the comp range. Lean on that sale; the range's confidence was lowered.`
+      );
+    } else if (recentMarketSale) {
       risks.push(
         `Arm's-length sale of this property on ${recentMarketSale.date} for $${recentMarketSale.price!.toLocaleString()} — the strongest value evidence; reconcile the comp range against it.`
       );

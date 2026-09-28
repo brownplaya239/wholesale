@@ -137,6 +137,10 @@ export type Comp = {
   pricePerUnit: number | null;
   pricePerAcre: number | null;
   sameBuilding: boolean;
+  beds?: number | null;
+  baths?: number | null;
+  /** Where the sale came from: state deed file, MLS closing, or both (merged). */
+  source?: "deed" | "mls" | "deed+mls";
   differences: string[];
   score: number;
   lat: number | null;
@@ -150,6 +154,8 @@ export type Valuation = {
   method: string;
   confidence: "high" | "medium" | "low";
   reasons: string[];
+  /** The property's own arm's-length sale in the last 12 months, if any. */
+  ownSale?: { price: number; date: string; source: string; inRange: boolean };
 };
 
 export type CompsResult = {
@@ -160,6 +166,8 @@ export type CompsResult = {
   radiusMi: number | null;
   valuation: Valuation | null;
   note?: string;
+  /** Candidate pool: deed sales, MLS-only closings, and sales found in both. */
+  pool?: { deed: number; mls: number; merged: number };
 };
 
 export type Characteristics = {

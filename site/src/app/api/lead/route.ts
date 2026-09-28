@@ -1,6 +1,6 @@
 import { after, NextRequest, NextResponse } from "next/server";
 import { getDb, type Db } from "@/lib/db";
-import { assignWorkflow } from "@/lib/enrich/insights";
+import { assignWorkflow, type Workflow } from "@/lib/enrich/insights";
 import {
   addressProblem,
   formatUSPhone,
@@ -11,6 +11,7 @@ import {
 import { BATHROOMS, BEDROOMS, CONDITIONS, OCCUPANCY, oneOf, PRIORITIES, TIMELINES } from "@/lib/leadOptions";
 import { currentDossier, enrichLead, leadFacts } from "@/lib/leads/enrich";
 import { fanOut, leadSubject, reportUrl } from "@/lib/leads/notify";
+import { answersUpdate } from "@/lib/leads/reportEmail";
 import { describeSource, parseSource } from "@/lib/leads/source";
 import {
   claimNotification,
@@ -237,6 +238,7 @@ async function handleDetails(body: Partial<LeadSubmission>) {
   let addressChanged = false;
   let subjectName = name;
   let subjectAddress = originalAddress;
+  let update: string[] = [];
   if (db) {
     try {
       const r = await updateDetails(db, leadId, patch);
@@ -247,7 +249,8 @@ async function handleDetails(body: Partial<LeadSubmission>) {
         subjectAddress = r.lead.addressOriginal;
         if (!changed.length) return NextResponse.json({ ok: true, changed: [] });
         // Answers like timeline/priority change the follow-up track.
-        await setEnrichmentWorkflow(db, r.lead);
+        const workflow = await setEnrichmentWorkflow(db, r.lead);
+        if (!addressChanged) update = answersUpdate(r.lead, currentDossier(r.lead), workflow, changed);
       }
     } catch (err) {
       console.error(`LEAD DETAILS PERSIST FAILURE leadId=${leadId} ${String(err)}`);
@@ -269,6 +272,7 @@ async function handleDetails(body: Partial<LeadSubmission>) {
   const text = [
     `More from ${subjectName || "this seller"} (added on the thank-you page):`,
     ...changed.map((k) => `${label[k] ?? k}: ${patch[k as keyof DetailsPatch] || "(cleared)"}`),
+    ...update,
     addressChanged && "Address/unit changed — the property report is being refreshed.",
     `Lead ID: ${leadId}`,
     db && `Report: ${reportUrl(leadId)}`,
@@ -290,6 +294,8 @@ async function handleDetails(body: Partial<LeadSubmission>) {
   return NextResponse.json({ ok: results.length === 0 || results.some((r) => r.ok), changed });
 }
 
-async function setEnrichmentWorkflow(db: Db, lead: LeadRecord): Promise<void> {
-  await setWorkflow(db, lead.id, assignWorkflow(currentDossier(lead), leadFacts(lead))).catch(() => {});
+async function setEnrichmentWorkflow(db: Db, lead: LeadRecord): Promise<Workflow> {
+  const workflow = assignWorkflow(currentDossier(lead), leadFacts(lead));
+  await setWorkflow(db, lead.id, workflow).catch(() => {});
+  return workflow;
 }

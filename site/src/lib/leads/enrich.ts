@@ -7,7 +7,8 @@ import { getDb } from "@/lib/db";
 import { buildDossier, withSellerFacts } from "@/lib/enrich/dossier";
 import { assignWorkflow, buildInsights, type LeadFacts } from "@/lib/enrich/insights";
 import type { Dossier } from "@/lib/enrich/types";
-import { enrichedEmail, fanOut } from "./notify";
+import { fanOut } from "./notify";
+import { enrichedEmail } from "./reportEmail";
 import { claimNotification, getLead, releaseNotification, setEnrichment, type LeadRecord } from "./store";
 
 export type EnrichReason = "new" | "address_changed" | "manual" | "retry";
@@ -58,8 +59,10 @@ export async function enrichLead(id: string, opts: { notify: boolean; reason: En
       const key = `enriched:${lead.addressCurrent.toLowerCase()}|${(lead.addressUnit ?? "").toLowerCase()}`;
       if (await claimNotification(db, id, key)) {
         const fresh = (await getLead(db, id))!;
-        const { subject, text } = enrichedEmail(fresh, dossier, opts.reason);
-        const results = await fanOut(subject, text, { stage: "enriched", leadId: id }, `leadId=${id} stage=enriched`);
+        // Seller answers that arrived while this ran are folded in.
+        const live = currentDossier(fresh) ?? dossier;
+        const { subject, text, html } = enrichedEmail(fresh, live, opts.reason, assignWorkflow(live, leadFacts(fresh)));
+        const results = await fanOut(subject, text, { stage: "enriched", leadId: id }, `leadId=${id} stage=enriched`, html);
         if (results.length && !results.some((r) => r.ok)) await releaseNotification(db, id, key);
       }
     }

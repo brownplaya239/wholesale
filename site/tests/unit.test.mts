@@ -13,8 +13,11 @@ import { pickUnit, locationUnit, kindOf } from "../src/lib/enrich/parcel.ts";
 import { parseSr1aLine, normalizeBlockLot, sr1aDate, nuLabel } from "../src/lib/sr1a.ts";
 import { dedupeKey } from "../src/lib/leads/store.ts";
 import { parseSource } from "../src/lib/leads/source.ts";
-import { buildDossier, withSellerFacts } from "../src/lib/enrich/dossier.ts";
-import { mlsNearby, mlsSubject, streetKey, testFeeds } from "../src/lib/enrich/mls.ts";
+import { buildDossier, mergeClosings, recentOwnSale, withSellerFacts } from "../src/lib/enrich/dossier.ts";
+import { mlsKind, mlsNearby, mlsSubject, streetKey, testFeeds, type MlsListing } from "../src/lib/enrich/mls.ts";
+import { municipalityAt } from "../src/lib/enrich/parcel.ts";
+import { reconcileOwnSale, isSimilar } from "../src/lib/enrich/comps.ts";
+import { answersUpdate, enrichedEmail } from "../src/lib/leads/reportEmail.ts";
 
 const NOW = new Date("2026-09-28T12:00:00Z");
 const daysAgo = (n: number) => new Date(NOW.getTime() - n * 86_400_000).toISOString().slice(0, 10);
@@ -397,4 +400,93 @@ test("listed with another broker -> LISTED-ELSEWHERE, verify track; seller beds/
       assert.equal(withSellerFacts(withMlsBeds, { beds: "5+", baths: null }).conflicts.length, d.conflicts.length + 1);
     }
   );
+});
+
+// --- MLS comps, own-sale check, email report ---------------------------------
+
+const closing = (over: Partial<MlsListing>): MlsListing => ({
+  feed: "MOMLS", listingId: "L1", status: "Closed", address: "20 Oak Rd, Freehold, NJ 07728", unit: null, postalCode: "07728",
+  propertyType: "Residential — Single Family Residence", beds: 4, baths: 2.5, sqft: 1600, yearBuilt: 1975, lotAcres: 0.3, units: null,
+  listPrice: 520000, closePrice: 510000, closeDate: daysAgo(40), listDate: daysAgo(90), daysOnMarket: 30, office: "X Realty", agent: null,
+  lat: offset(0.3), lng: LNG, distanceMi: 0.3, modified: null, ...over,
+});
+
+test("MLS closings merge into deed comps: same sale enriched, newer MLS-only sale added, subject skipped", () => {
+  const deeds: CompCandidate[] = [
+    { ...cand(1, { location: "20 OAK ROAD", price: 510000, saleDate: daysAgo(45) }), source: "deed" },
+    { ...cand(2, { location: "7 ELM ST", price: 450000, saleDate: daysAgo(400) }), source: "deed" },
+  ];
+  const r = mergeClosings(deeds, [
+    closing({}), // same sale as the 20 Oak Rd deed
+    closing({ listingId: "L2", address: "7 Elm Street, Freehold, NJ 07728", closePrice: 499000, closeDate: daysAgo(20), beds: 3 }), // newer sale of 7 Elm
+    closing({ listingId: "L3", address: "12 Main Street, Freehold, NJ 07728", closePrice: 600000 }), // the subject itself
+    closing({ listingId: "L4", address: "9 Pine Ct, Freehold, NJ 07728", propertyType: "Residential — Condominium" }), // wrong type
+    closing({ listingId: "L5", address: "30 Birch Ln, Freehold, NJ 07728", closePrice: 530000, lat: offset(0.5) }), // MLS-only (after the deed file)
+  ], { kind: "single_family", subjectAddress: "12 Main St, Freehold, NJ, 07728", unit: null, munis: [] });
+  assert.equal(r.merged, 1);
+  assert.equal(r.mlsOnly, 2);
+  const oak = deeds.find((c) => c.location === "20 OAK ROAD")!;
+  assert.equal(oak.source, "deed+mls");
+  assert.equal(oak.beds, 4);
+  assert.ok(!deeds.some((c) => c.location === "7 ELM ST"), "older deed sale of the same house replaced by the newer MLS sale");
+  assert.ok(deeds.some((c) => c.pin === "mls:L2" && c.price === 499000 && c.beds === 3));
+  assert.ok(!deeds.some((c) => c.pin === "mls:L3"), "the subject's own sale isn't a comp");
+  assert.ok(!deeds.some((c) => c.pin === "mls:L4"), "condo excluded for a single-family subject");
+});
+
+test("bedroom count gates comps; property types map from MLS; towns found by outline", () => {
+  const s = subject({ beds: 5 });
+  assert.equal(isSimilar(s, cand(1, { beds: 3 })), false, "5 bd vs 3 bd isn't comparable");
+  assert.equal(isSimilar(s, cand(1, { beds: 4 })), true);
+  assert.equal(isSimilar(s, cand(1, { beds: null })), true, "unknown beds doesn't exclude");
+  assert.equal(mlsKind({ propertyType: "Residential — Single Family Residence" }), "single_family");
+  assert.equal(mlsKind({ propertyType: "Residential — Townhouse" }), "condo");
+  assert.equal(mlsKind({ propertyType: "Residential Income — Duplex" }), "multifamily");
+  assert.equal(mlsKind({ propertyType: "Land" }), "land");
+  assert.equal(mlsKind({ propertyType: "Residential Lease" }), null);
+  const square = { code: "1316", name: "FREEHOLD TWP", rings: [[[-74.1, 39.9], [-73.9, 39.9], [-73.9, 40.1], [-74.1, 40.1], [-74.1, 39.9]]] as [number, number][][] };
+  assert.equal(municipalityAt(LAT, LNG, [square])?.code, "1316");
+  assert.equal(municipalityAt(41, LNG, [square]), null);
+});
+
+test("own recent sale outside the comp range lowers confidence; inside keeps it", () => {
+  const v = { low: 760000, mid: 815000, high: 870000, method: "m", confidence: "high" as const, reasons: [] };
+  const below = reconcileOwnSale(v, { price: 732500, date: "2026-06-26", source: "deed record" });
+  assert.equal(below.confidence, "medium");
+  assert.equal(below.ownSale?.inRange, false);
+  assert.match(below.reasons.at(-1)!, /below the comp range; confidence lowered/);
+  const inside = reconcileOwnSale(v, { price: 800000, date: "2026-06-26", source: "MLS" });
+  assert.equal(inside.confidence, "high");
+  assert.equal(reconcileOwnSale(v, null), v);
+  // Newest of deed/MLS within 12 months; older sales ignored.
+  const deed = { date: "2026-06-26", recorded: null, price: 732500, usable: true, nuCode: null, nuLabel: null, livingSpace: null, yearBuilt: null, propClass: "2", location: null, sourceFile: "x" };
+  const old = { ...deed, date: "2024-01-05", price: 500000 };
+  assert.deepEqual(recentOwnSale([deed, old], [], NOW), { price: 732500, date: "2026-06-26", source: "deed record" });
+  assert.equal(recentOwnSale([old], [], NOW), null);
+  assert.equal(recentOwnSale([], [closing({ address: "x", closeDate: "2026-08-30", closePrice: 740000 })], NOW)?.source, "MLS");
+});
+
+test("report email carries the whole report inline, escaped, with offer numbers", async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async () => { throw new TypeError("offline test"); }) as typeof fetch;
+  const d = await buildDossier({ address: "12 Main St, Freehold, NJ 07728", unit: null, lead: FACTS }, null).finally(() => { globalThis.fetch = realFetch; });
+  const comps = selectComps(subject({ beds: 3 }), [1, 2, 3, 4, 5, 6].map((i) => cand(i, { beds: 3, baths: 2, source: i === 1 ? "mls" : "deed" } as never)), NOW);
+  const dossier = { ...d!, comps: { status: "ok" as const, data: comps, source: null } };
+  dossier.comps.data!.valuation = reconcileOwnSale(comps.valuation!, { price: 300000, date: "2026-06-26", source: "deed record" });
+  const lead = {
+    id: "abc", name: "Pat <Seller>", phone: "(732) 555-0100", addressOriginal: "12 Main St", addressCurrent: "12 Main St", addressUnit: null,
+    timeline: "ASAP", priority: null, condition: "Needs minor updates", occupancy: null, beds: "3", baths: null, email: null, notes: "roof <old>", workflow: null,
+  } as never;
+  const e = enrichedEmail(lead, dossier, "new", assignWorkflow(dossier, { ...FACTS, timeline: "ASAP" }));
+  assert.match(e.subject, /^Re: 🔥 LEAD: Pat <Seller>/);
+  for (const needle of ["Max cash offer", "Assignment offer", "Seller's net if listed as-is", "Comparable sales (6)", "below the range", "Ask on the call", "Next steps"]) {
+    assert.ok(e.html.includes(needle), needle);
+  }
+  assert.ok(e.html.includes("Pat &lt;Seller&gt;") && e.html.includes("roof &lt;old&gt;"), "seller text is escaped");
+  assert.ok(!e.html.includes("<Seller>"));
+  assert.match(e.text, /Own sale: 2026-06-26 \$300,000 \(deed record\) — BELOW the range/);
+  assert.match(e.text, /\[MLS\]/);
+  const upd = answersUpdate({ ...(lead as object), condition: "Needs major repairs" } as never, dossier, null, ["condition"]);
+  assert.match(upd.join("\n"), /Repairs for "Needs major repairs"/);
+  assert.deepEqual(answersUpdate(lead, dossier, null, ["email"]), [], "nothing numeric changed");
 });
