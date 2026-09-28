@@ -292,6 +292,30 @@ test("MLS: server rejects $select -> retried without it; 401 stops immediately",
   );
 });
 
+test("MOMLS with only a token: Spark endpoints probed, first that accepts it is used", async () => {
+  const hosts: string[] = [];
+  await withMls(
+    { MLS_MOMLS_TOKEN: "idx-token" },
+    (url) => {
+      hosts.push(url.origin + url.pathname);
+      if (url.hostname === "replication.sparkapi.com") return new Response("forbidden", { status: 403 });
+      if (url.pathname === "/Reso/OData/Property") return reso([row({ StandardStatus: url.searchParams.get("$filter")?.includes("Expired") ? undefined : "Active" })].filter((r) => r.StandardStatus));
+      return new Response("not found", { status: 404 });
+    },
+    async () => {
+      const [t] = await testFeeds();
+      assert.equal(t.ok, true, t.detail);
+      assert.equal(t.endpoint, "https://sparkapi.com/Reso/OData");
+      assert.equal(t.statuses!.Active, true);
+      assert.equal(t.statuses!.Expired, false);
+      assert.match(t.detail, /not in this feed: Expired/);
+      const s = await mlsSubject("12 Main St, Freehold, NJ, 07728", "07728", null);
+      assert.equal(s.status, "ok");
+      assert.ok(hosts.filter((h) => h.startsWith("https://replication")).length <= 2, "working endpoint is remembered");
+    }
+  );
+});
+
 test("MLS OAuth2 client credentials: token fetched once and reused", async () => {
   let tokenCalls = 0;
   await withMls(

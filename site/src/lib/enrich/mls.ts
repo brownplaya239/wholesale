@@ -5,8 +5,8 @@
  * authenticated internal report, never on the public site.
  *
  * Per feed (ID = MOMLS | CJMLS), set in Vercel:
- *   MLS_<ID>_URL            RESO OData base, e.g.
- *                           https://replication.sparkapi.com/Version/3/Reso/OData
+ *   MLS_<ID>_URL            RESO OData base. Optional for MOMLS: Spark's
+ *                           endpoints are tried until one accepts the token.
  *   MLS_<ID>_TOKEN          bearer token (Spark), or instead:
  *   MLS_<ID>_CLIENT_ID / MLS_<ID>_CLIENT_SECRET / MLS_<ID>_TOKEN_URL
  *   [MLS_<ID>_SCOPE]        OAuth2 client-credentials (Trestle, Rapattoni…)
@@ -55,7 +55,8 @@ export type MlsSubject = {
 type Feed = {
   id: string;
   name: string;
-  baseUrl: string;
+  /** Candidate RESO bases; the first that accepts the credentials is used. */
+  baseUrls: string[];
   resource: string;
   token?: string;
   clientId?: string;
@@ -69,22 +70,33 @@ const FEED_NAMES: Record<string, string> = {
   CJMLS: "Central Jersey MLS (CJMLS)",
 };
 
+/** Spark (Flexmls) hosts: which one a key works on depends on its role. */
+const DEFAULT_BASES: Record<string, string[]> = {
+  MOMLS: [
+    "https://replication.sparkapi.com/Version/3/Reso/OData",
+    "https://sparkapi.com/Reso/OData",
+    "https://sparkapi.com/Version/3/Reso/OData",
+    "https://replication.sparkapi.com/Reso/OData",
+  ],
+};
+
 /** Statuses that mean the property is under a listing agreement right now. */
 export const CURRENT_STATUSES = ["Active", "Active Under Contract", "Pending", "Coming Soon", "Hold"];
 
 export function mlsFeeds(env: NodeJS.ProcessEnv = process.env): Feed[] {
   return Object.keys(FEED_NAMES).flatMap((id) => {
-    const baseUrl = env[`MLS_${id}_URL`]?.replace(/\/+$/, "");
+    const explicit = env[`MLS_${id}_URL`]?.trim().replace(/\/+$/, "");
+    const baseUrls = explicit ? [explicit] : DEFAULT_BASES[id] ?? [];
     const token = env[`MLS_${id}_TOKEN`];
     const clientId = env[`MLS_${id}_CLIENT_ID`];
     const clientSecret = env[`MLS_${id}_CLIENT_SECRET`];
     const tokenUrl = env[`MLS_${id}_TOKEN_URL`];
-    if (!baseUrl || !(token || (clientId && clientSecret && tokenUrl))) return [];
+    if (!baseUrls.length || !(token || (clientId && clientSecret && tokenUrl))) return [];
     return [
       {
         id,
         name: FEED_NAMES[id],
-        baseUrl,
+        baseUrls,
         resource: env[`MLS_${id}_RESOURCE`] || "Property",
         token,
         clientId,
@@ -121,6 +133,32 @@ async function bearer(feed: Feed): Promise<string> {
   return json.access_token;
 }
 
+const resolved = new Map<string, string>();
+
+/** The feed's working RESO base: probed once per server instance. */
+async function baseFor(feed: Feed, auth: string): Promise<string> {
+  if (feed.baseUrls.length === 1) return feed.baseUrls[0];
+  const known = resolved.get(feed.id);
+  if (known) return known;
+  const tried: string[] = [];
+  for (const base of feed.baseUrls) {
+    try {
+      const res = await fetch(`${base}/${feed.resource}?$top=1`, {
+        headers: { Authorization: `Bearer ${auth}`, Accept: "application/json" },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (res.ok && Array.isArray(((await res.json()) as { value?: unknown }).value)) {
+        resolved.set(feed.id, base);
+        return base;
+      }
+      tried.push(`${base} → HTTP ${res.status}`);
+    } catch (err) {
+      tried.push(`${base} → ${String(err).slice(0, 80)}`);
+    }
+  }
+  throw new ProviderError(`mls_${feed.id.toLowerCase()}`, `no endpoint accepted the token (${tried.join("; ")})`, 401);
+}
+
 const SELECT = [
   "ListingKey", "ListingId", "StandardStatus", "UnparsedAddress", "StreetNumber", "StreetName",
   "UnitNumber", "City", "PostalCode", "PropertyType", "PropertySubType", "BedroomsTotal",
@@ -137,12 +175,13 @@ const SELECT = [
  */
 async function query(feed: Feed, filters: string[], extra: Record<string, string>, ttlSec: number): Promise<Record<string, unknown>[]> {
   const auth = await bearer(feed);
+  const base = await baseFor(feed, auth);
   let lastErr: unknown;
   for (const filter of filters) {
     for (const withSelect of [true, false]) {
       const params = new URLSearchParams({ $filter: filter, ...extra });
       if (withSelect) params.set("$select", SELECT);
-      const url = `${feed.baseUrl}/${feed.resource}?${params}`;
+      const url = `${base}/${feed.resource}?${params}`;
       try {
         const json = await fetchJson<{ value?: Record<string, unknown>[] }>(`mls_${feed.id.toLowerCase()}`, url, {
           headers: { Authorization: `Bearer ${auth}` },
@@ -363,24 +402,49 @@ export async function mlsNearby(
   };
 }
 
-/** Admin "test connection": one tiny query per configured feed. */
-export async function testFeeds(): Promise<{ feed: string; ok: boolean; detail: string }[]> {
+/** Statuses probed by the connection test (what the key's role can see). */
+const PROBE_STATUSES = ["Active", "Active Under Contract", "Pending", "Closed", "Expired", "Withdrawn", "Canceled"];
+
+export type FeedTest = { feed: string; ok: boolean; detail: string; endpoint?: string; fields?: number; statuses?: Record<string, boolean | null> };
+
+/** Admin "test connection": which endpoint works, and what the key can see. */
+export async function testFeeds(): Promise<FeedTest[]> {
   const feeds = mlsFeeds();
   return Promise.all(
-    feeds.map(async (feed) => {
+    feeds.map(async (feed): Promise<FeedTest> => {
       try {
         const auth = await bearer(feed);
-        const res = await fetch(`${feed.baseUrl}/${feed.resource}?$top=1`, {
-          headers: { Authorization: `Bearer ${auth}`, Accept: "application/json" },
-          signal: AbortSignal.timeout(15_000),
-        });
-        const body = await res.text();
-        if (!res.ok) return { feed: feed.name, ok: false, detail: `HTTP ${res.status} ${body.slice(0, 200)}` };
-        const json = JSON.parse(body) as { value?: Record<string, unknown>[] };
-        const fields = Object.keys(json.value?.[0] ?? {});
-        return { feed: feed.name, ok: true, detail: `Connected — ${fields.length} fields per listing${fields.includes("BedroomsTotal") ? ", beds/baths present" : ""}.` };
+        const base = await baseFor(feed, auth);
+        const get = async (qs: string) => {
+          const res = await fetch(`${base}/${feed.resource}?${qs}`, {
+            headers: { Authorization: `Bearer ${auth}`, Accept: "application/json" },
+            signal: AbortSignal.timeout(15_000),
+          });
+          const body = await res.text();
+          if (!res.ok) throw new Error(`HTTP ${res.status} ${body.slice(0, 200)}`);
+          return (JSON.parse(body) as { value?: Record<string, unknown>[] }).value ?? [];
+        };
+        const fields = Object.keys((await get("$top=1"))[0] ?? {});
+        const statuses: Record<string, boolean | null> = {};
+        await Promise.all(
+          PROBE_STATUSES.map(async (st) => {
+            statuses[st] = await get(new URLSearchParams({ $filter: `StandardStatus eq '${st}'`, $top: "1" }).toString())
+              .then((v) => v.length > 0)
+              .catch(() => null);
+          })
+        );
+        const seen = PROBE_STATUSES.filter((st) => statuses[st]);
+        const unseen = PROBE_STATUSES.filter((st) => statuses[st] === false);
+        return {
+          feed: feed.name,
+          ok: true,
+          endpoint: base,
+          fields: fields.length,
+          statuses,
+          detail: `Connected via ${base} — ${fields.length} fields${fields.includes("BedroomsTotal") ? " incl. beds/baths" : ""}. Sees: ${seen.join(", ") || "none"}${unseen.length ? ` · not in this feed: ${unseen.join(", ")}` : ""}.`,
+        };
       } catch (err) {
-        return { feed: feed.name, ok: false, detail: String(err).slice(0, 200) };
+        return { feed: feed.name, ok: false, detail: String(err).slice(0, 400) };
       }
     })
   );

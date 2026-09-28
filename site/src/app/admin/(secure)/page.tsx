@@ -182,7 +182,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
             {feeds.length ? (
               <strong>{feeds.map((f) => f.name).join(", ")}</strong>
             ) : (
-              <strong className="text-amber-800">not connected — set the MLS_MOMLS_* / MLS_CJMLS_* variables in Vercel</strong>
+              <strong className="text-amber-800">not connected — add MLS_MOMLS_TOKEN (or the MLS_CJMLS_* variables) in Vercel</strong>
             )}
           </p>
           {feeds.length > 0 && (
