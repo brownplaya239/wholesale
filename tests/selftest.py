@@ -41,6 +41,9 @@ s06 = _load("s06", ROOT / "scripts/06_routes.py")
 s07 = _load("s07", ROOT / "scripts/07_comps.py")
 s08 = _load("s08", ROOT / "scripts/08_targets.py")
 spark = _load("spark", ROOT / "scripts/spark_client.py")
+import acq_common as ac  # noqa: E402
+s09 = _load("s09", ROOT / "scripts/09_acq_ingest.py")
+s10 = _load("s10", ROOT / "scripts/10_acq_release.py")
 
 PASS = 0
 
@@ -554,12 +557,17 @@ def test_scale():
     check(dt < 120, f"scale: completes in reasonable time ({dt:.1f}s)")
 
 
+from acq_selftest import test_acq  # noqa: E402
+
+
 def main():
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
         test_parsers(tmp)
         test_normalizers()
         test_pipeline(tmp)
+    with tempfile.TemporaryDirectory() as td:
+        test_acq(Path(td), check, ac, s09, s10)
     test_spark()
     test_scale()
     print(f"\nAll {PASS} checks passed.")

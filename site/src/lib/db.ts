@@ -12,7 +12,7 @@ export type Db = {
   q<T = Record<string, unknown>>(text: string, params?: unknown[]): Promise<T[]>;
 };
 
-const SCHEMA_VERSION = "4";
+const SCHEMA_VERSION = "5";
 
 const SCHEMA: string[] = [
   `CREATE TABLE IF NOT EXISTS app_meta (key text PRIMARY KEY, value text NOT NULL)`,
@@ -101,6 +101,60 @@ const SCHEMA: string[] = [
     expires_at timestamptz NOT NULL,
     payload jsonb NOT NULL
   )`,
+  // v5: acquisition machine — WAVV calls, webhook dedupe, internal suppression
+  `CREATE TABLE IF NOT EXISTS acq_calls (
+    id text PRIMARY KEY,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    direction text,
+    phone text,
+    contact_id text,
+    user_id text,
+    campaign_id text,
+    started_at timestamptz,
+    ended_at timestamptz,
+    seconds int,
+    outcome text,
+    human boolean,
+    disposition text,
+    disposition_key text,
+    note text,
+    dims jsonb NOT NULL DEFAULT '{}'::jsonb,
+    conversation boolean,
+    plan jsonb,
+    flags jsonb NOT NULL DEFAULT '[]'::jsonb,
+    ended_status text NOT NULL DEFAULT 'waiting',
+    ended_attempts int NOT NULL DEFAULT 0,
+    ended_error text,
+    recorded boolean NOT NULL DEFAULT false,
+    transcript_status text NOT NULL DEFAULT 'waiting',
+    transcript_attempts int NOT NULL DEFAULT 0,
+    transcript text,
+    wavv_summary text,
+    intel jsonb,
+    intel_status text,
+    intel_error text,
+    intel_at timestamptz
+  )`,
+  `CREATE INDEX IF NOT EXISTS acq_calls_started_idx ON acq_calls (started_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS acq_calls_user_idx ON acq_calls (user_id, started_at)`,
+  `CREATE TABLE IF NOT EXISTS acq_webhook_events (
+    event text NOT NULL,
+    call_id text NOT NULL,
+    received_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (event, call_id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS acq_suppression (
+    id bigserial PRIMARY KEY,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    kind text NOT NULL,
+    value text NOT NULL,
+    reason text NOT NULL,
+    source text NOT NULL,
+    call_id text,
+    contact_id text
+  )`,
+  `CREATE INDEX IF NOT EXISTS acq_suppression_value_idx ON acq_suppression (kind, value)`,
   `CREATE TABLE IF NOT EXISTS api_usage (
     day date NOT NULL,
     provider text NOT NULL,

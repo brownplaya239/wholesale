@@ -10,7 +10,9 @@ import {
 } from "@/lib/lead";
 import { BATHROOMS, BEDROOMS, CONDITIONS, OCCUPANCY, oneOf, PRIORITIES, TIMELINES } from "@/lib/leadOptions";
 import { currentDossier, enrichLead, leadFacts } from "@/lib/leads/enrich";
-import { fanOut, leadSubject, reportUrl } from "@/lib/leads/notify";
+import { fanOut, leadSubject, reportUrl, type Delivery } from "@/lib/leads/notify";
+import { ghlFromEnv } from "@/lib/acq/ghl";
+import { pushWebLead, pushWebLeadDetails } from "@/lib/acq/sync";
 import { answersUpdate } from "@/lib/leads/reportEmail";
 import { describeSource, parseSource } from "@/lib/leads/source";
 import {
@@ -171,7 +173,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, delivered: 0, duplicate: true, leadId });
   }
 
-  const results = await fanOut(subject, text, payload, `leadId=${leadId} stage=full`);
+  const [results, ghlResult] = await Promise.all([
+    fanOut(subject, text, payload, `leadId=${leadId} stage=full`),
+    deliverToGhl({ leadId, name, phone, address, reportUrl: persisted ? reportUrl(leadId) : undefined }),
+  ]);
+  if (ghlResult) results.push(ghlResult);
 
   // No channels configured at all: log the full lead so it's recoverable from
   // server logs, and still succeed for the user (dev / pre-launch state).
@@ -192,6 +198,23 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ ok: true, delivered: results.filter((r) => r.ok).length, leadId });
+}
+
+/**
+ * GoHighLevel is the system of record: every full lead becomes Contact +
+ * Property + Residential opportunity (tagged acq:inbound -> speed-to-lead
+ * workflow + Inbound Hot Queue). Counts as a delivery channel.
+ */
+async function deliverToGhl(lead: { leadId: string; name: string; phone: string; address: string; reportUrl?: string }): Promise<Delivery | null> {
+  const ghl = ghlFromEnv();
+  if (!ghl) return null;
+  try {
+    const r = await pushWebLead(ghl, lead, { ownerUserId: process.env.GHL_OWNER_USER_ID || undefined });
+    return { channel: "ghl", ok: true, detail: `contact ${r.contactId} opp ${r.opportunityId}` };
+  } catch (err) {
+    console.error(`LEAD DELIVERY FAILURE channel=ghl leadId=${lead.leadId} ${String(err).slice(0, 300)}`);
+    return { channel: "ghl", ok: false, detail: String(err).slice(0, 200) };
+  }
 }
 
 /**
@@ -238,6 +261,7 @@ async function handleDetails(body: Partial<LeadSubmission>) {
   let addressChanged = false;
   let subjectName = name;
   let subjectAddress = originalAddress;
+  let subjectPhone = "";
   let update: string[] = [];
   if (db) {
     try {
@@ -247,6 +271,7 @@ async function handleDetails(body: Partial<LeadSubmission>) {
         addressChanged = r.addressChanged;
         subjectName = r.lead.name;
         subjectAddress = r.lead.addressOriginal;
+        subjectPhone = normalizeUSPhone(r.lead.phone) ?? "";
         if (!changed.length) return NextResponse.json({ ok: true, changed: [] });
         // Answers like timeline/priority change the follow-up track.
         const workflow = await setEnrichmentWorkflow(db, r.lead);
@@ -289,6 +314,16 @@ async function handleDetails(body: Partial<LeadSubmission>) {
   if (db && addressChanged) {
     after(async () => {
       await enrichLead(leadId, { notify: true, reason: "address_changed" });
+    });
+  }
+  const ghl = ghlFromEnv();
+  const phoneForGhl = subjectPhone;
+  if (ghl && phoneForGhl && subjectName) {
+    const answers = Object.fromEntries(changed.map((k) => [k, String(patch[k as keyof DetailsPatch] ?? "")]));
+    after(async () => {
+      await pushWebLeadDetails(ghl, { name: subjectName, phone: phoneForGhl, leadId }, answers).catch((e) =>
+        console.error(`GHL DETAILS FAILURE leadId=${leadId} ${String(e).slice(0, 200)}`)
+      );
     });
   }
   return NextResponse.json({ ok: results.length === 0 || results.some((r) => r.ok), changed });

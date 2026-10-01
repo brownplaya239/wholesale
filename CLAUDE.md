@@ -1,7 +1,9 @@
 # Wholesaling 8.11.2026
 
-NJ real-estate wholesaling pipeline built around an old (~2019-21 vintage) vendor lead list.
-Owner: Sum. Footprint: Monmouth, Middlesex, Somerset, Union, Hudson counties, NJ.
+NJ real-estate wholesaling pipeline built around an old (~2019-21 vintage) vendor lead list,
+now extended (2026-10-01) into a GHL-centered acquisition machine fed by BatchLeads + Land Portal.
+Owner: Sum. Footprint: original list = Monmouth, Middlesex, Somerset, Union, Hudson; the
+BatchLeads pull adds Camden, Mercer, Atlantic, Cumberland, Ocean, Burlington, Gloucester, Essex.
 
 ## Current state (as of 2026-08-11)
 
@@ -34,6 +36,22 @@ Owner: Sum. Footprint: Monmouth, Middlesex, Somerset, Union, Hudson counties, NJ
   placeholders in `site/src/config/site.ts`; launch checklist in
   `site/README.md`. Deploy: Vercel, root dir `site/`. Web leads with stored
   consent are the ONLY texting lane this business has.
+- ACQUISITION MACHINE (2026-10-01) — docs/ACQUISITION_SYSTEM.md is the operating doc.
+  GoHighLevel is the system of record (Contact = person + dial state, Property =
+  custom object, Opportunity = deal; schema as code in `site/src/lib/acq/schema.ts`,
+  `npm run ghl:provision`). `scripts/09_acq_ingest.py` (vendor exports -> deduped,
+  suppressed, scored universe with lanes + call windows) and
+  `scripts/10_acq_release.py` (capacity-driven stratified waves, re-scrub, patch)
+  feed `npm run ghl:push`. WAVV (embedded in GHL) dials; its signed webhooks hit
+  `/api/hooks/wavv` -> call log in Postgres -> compliance audit -> disposition
+  engine (`dispositions.ts`, the ONLY writer of dial state) -> GHL; recorded calls
+  -> WAVV transcript -> Claude review (`callIntel.ts`, writes only AI fields) ->
+  auto-DNC on missed opt-outs, hidden-hot alerts, QA. Hot/Booked outbound sellers
+  get the site's property report. `/admin/calls` = funnel by caller x county x
+  cohort, compliance, QA listen-list. Web-form leads also land in GHL.
+  Tests: `python tests/selftest.py` (incl. acquisition section) +
+  `cd site && npm run test:unit`. Live GHL/WAVV calls were NOT exercised from the
+  dev sandbox — section 12 of the doc lists what to verify on first run.
 
 ## Pipeline (docs/PLAYBOOK.md has full detail + budget)
 
@@ -56,8 +74,17 @@ Owner: Sum. Footprint: Monmouth, Middlesex, Somerset, Union, Hudson counties, NJ
 
 ## Hard rules
 
-- No AI voice, ringless VM, or bulk SMS on this file — zero consent artifacts exist.
-  FCC 24-17 puts AI voice inside TCPA §227(b): $500–$1,500/call, uncapped.
+- No AI voice, ringless VM, bulk SMS, or PRERECORDED VOICEMAIL DROPS on this file or
+  any BatchLeads / Land Portal list — zero consent artifacts exist. FCC 24-17 puts AI
+  voice inside TCPA §227(b): $500–$1,500/call, uncapped. WAVV auto-drops a recorded
+  voicemail in multi-line mode: never upload one. Cold GHL contacts carry SMS DND +
+  `no-sms`.
+- Dialing (WAVV): DNC+litigator scrub ≤31 days under Sum's own registry SAN, power
+  lane only, 1 line until counsel signs off on abandonment (3%/30 days, 47 CFR
+  64.1200(a)(7)); FL/OK/MD owners or area codes = manual lane, single line.
+  Calling policy Mon–Sat 9am–8pm in the owner's zone (mailing state), no Sundays or
+  federal holidays. "This call may be recorded" + Sum's license/Coldwell Banker in
+  the opening. Callers never quote price, offers, commission or listing terms.
 - Sum IS a licensed NJ real estate agent (updated 2026-08-11) — the
   unlicensed-brokering concern is moot; the binding rules are NJ REC's:
   disclose license status at first contact and in writing (and in any
@@ -83,7 +110,9 @@ Owner: Sum. Footprint: Monmouth, Middlesex, Somerset, Union, Hudson counties, NJ
   `site/src/components/RoleDisclosure.tsx` is the canonical wording. Never
   start as listing agent and then buy or assign without separate written,
   informed consent.
-- Every dial/scrub/consent event gets logged to `compliance/` before outreach scales.
+- Every dial/scrub/consent event gets logged to `compliance/` before outreach scales
+  (dial log: `/api/admin/acq/export?kind=calls`; scrubs: `10 scrub-apply` appends
+  scrub_log.csv; internal DNC: `acq_suppression` table, append-only).
 
 ## Conventions
 

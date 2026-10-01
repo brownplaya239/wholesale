@@ -15,6 +15,14 @@ export default function SecureAdminLayout({ children }: { children: React.ReactN
           <Link href="/admin" className="text-lg font-extrabold tracking-tight">
             House<span className="text-accent">Sold</span>NJ · Leads
           </Link>
+          <nav className="flex items-center gap-3 text-sm font-semibold text-ink-soft">
+            <Link href="/admin" className="hover:text-ink">
+              Leads
+            </Link>
+            <Link href="/admin/calls" className="hover:text-ink">
+              Calls
+            </Link>
+          </nav>
           <form method="post" action="/api/admin/logout">
             <button className="rounded-lg border border-line px-3 py-1.5 text-sm font-semibold text-ink-soft hover:border-ink-soft">
               Sign out

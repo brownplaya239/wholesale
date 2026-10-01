@@ -25,6 +25,25 @@
 - [ ] Consider match-rate tuning pass (85.8% now; 908 unmatched / 226
       ambiguous — mostly city-name and truncation issues)
 
+## Acquisition machine (2026-10-01) — docs/ACQUISITION_SYSTEM.md §2 launch gate first
+- [ ] Coldwell Banker written sign-off: solicitation, WAVV + line count, recording,
+      callers' role, principal buys/assignment
+- [ ] Federal DNC SAN for EVERY area code dialed (609/640/856/732/848/908/201/551/973/862
+      + out-of-state); scrub vendor scrubs under it; litigator account
+- [ ] Counsel: NJ telemarketer registration (N.J.S.A. 56:8-119 et seq.), unlicensed
+      caller boundaries, multi-line abandonment before going above 1 line
+- [ ] MLS listing suppression for South Jersey (Bright MLS) — MOMLS only covers Monmouth/Ocean
+- [ ] GHL: PIT + Property custom object (UI) + `npm run ghl:provision` until clean;
+      multiple-opps setting; conditional required fields; smart lists Q1-Q5 + Sum's views;
+      2 workflows
+- [ ] WAVV: 12 dispositions (exact labels), recording + transcription ON, NO voicemail
+      recording, timezone + nuisance protection ON, 1 line, API key + webhook secret
+- [ ] Vercel env: GHL_*, WAVV_*, ANTHROPIC_API_KEY
+- [ ] Pull BatchLeads (one export per cohort query) + Land Portal; `09 inspect` each;
+      fix ALIASES for any unmapped header; `09 add`; scrub; `09 build`
+- [ ] 25-record test batch + 10 test calls (§9), then first wave at `10 plan` size
+- [ ] Week 2: verify AI call review on real transcripts; tune prompt if fields drift
+
 ## Next
 - [x] Implement 03_buyer_harvest -> buyers.csv (rank grantees, collapse shells)
 - [x] Implement 04_skiptrace_export -> skiptrace_upload.csv
