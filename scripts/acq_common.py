@@ -451,10 +451,17 @@ def append_scrub_log(source: str, n_records: int, n_suppressed: int, path: Path)
     COMPLIANCE.mkdir(parents=True, exist_ok=True)
     log = COMPLIANCE / "scrub_log.csv"
     h = hashlib.sha256(path.read_bytes()).hexdigest()[:16] if path.exists() else ""
-    row = pd.DataFrame([{"date": date.today().isoformat(), "source": source,
-                         "n_records": n_records, "n_suppressed": n_suppressed,
-                         "file_hash": h, "file": path.name}])
-    row.to_csv(log, mode="a", header=not log.exists(), index=False)
+    row = {"date": date.today().isoformat(), "source": source, "n_records": n_records,
+           "n_suppressed": n_suppressed, "file_hash": h, "file": path.name}
+    if log.exists() and log.stat().st_size:
+        # append-only: match the header already in the file (05 creates it
+        # without a "file" column — fold the file name into source then)
+        cols = log.read_text().splitlines()[0].split(",")
+        if "file" not in cols:
+            row["source"] = f"{source} ({path.name})"
+        pd.DataFrame([{c: row.get(c, "") for c in cols}]).to_csv(log, mode="a", header=False, index=False)
+    else:
+        pd.DataFrame([row]).to_csv(log, mode="a", header=True, index=False)
 
 
 def phone_state(p: str, vendor_dnc, vendor_litigator, scrubs: dict, internal: set,

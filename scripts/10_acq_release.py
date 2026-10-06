@@ -19,6 +19,9 @@
       waves/patch_YYYY-MM-DD.jsonl (push it the same way as a wave)
   python scripts/10_acq_release.py mail-export
       mail_only owners (no callable phone) -> mail_only_YYYY-MM-DD.csv
+  python scripts/10_acq_release.py compliance-init
+      create the append-only logs in compliance/ (training_log, optouts,
+      incidents, scrub_log, ...) if missing — never overwrites
 
 Why capacity-driven: a contact needs ~6-8 attempts over ~30 days. Fresh
 owners per week = weekly dials / attempts per owner. Releasing faster than
@@ -346,6 +349,21 @@ def cmd_mail_export(args) -> None:
     print(f"{len(m):,} mail-only owners -> {out} (First-Class, Return Service Requested)")
 
 
+def cmd_compliance_init(args) -> None:
+    from nj_common import COMPLIANCE_TEMPLATES
+    ac.COMPLIANCE.mkdir(parents=True, exist_ok=True)
+    (ac.COMPLIANCE / "skiptrace_raw").mkdir(exist_ok=True)
+    (ac.COMPLIANCE / "signed").mkdir(exist_ok=True)
+    for name, header in COMPLIANCE_TEMPLATES.items():
+        p = ac.COMPLIANCE / name
+        if p.exists():
+            print(f"  exists  {p.name}")
+        else:
+            p.write_text(header)
+            print(f"  created {p.name}")
+    print("Signed acknowledgements go in compliance/signed/ (kept out of git).")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -368,9 +386,11 @@ def main() -> None:
     p.add_argument("--source", required=True); p.add_argument("--date")
     sub.add_parser("patch")
     sub.add_parser("mail-export")
+    sub.add_parser("compliance-init")
     args = ap.parse_args()
     {"plan": cmd_plan, "wave": cmd_wave, "scrub-export": cmd_scrub_export,
-     "scrub-apply": cmd_scrub_apply, "patch": cmd_patch, "mail-export": cmd_mail_export}[args.cmd](args)
+     "scrub-apply": cmd_scrub_apply, "patch": cmd_patch, "mail-export": cmd_mail_export,
+     "compliance-init": cmd_compliance_init}[args.cmd](args)
 
 
 if __name__ == "__main__":

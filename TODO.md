@@ -30,14 +30,18 @@
       callers' role, principal buys/assignment
 - [ ] Federal DNC SAN for EVERY area code dialed (609/640/856/732/848/908/201/551/973/862
       + out-of-state); scrub vendor scrubs under it; litigator account
-- [ ] Counsel: NJ telemarketer registration (N.J.S.A. 56:8-119 et seq.), unlicensed
-      caller boundaries, multi-line abandonment before going above 1 line
+- [x] Written DNC procedures + training program + sign-off form (compliance/, 2026-10-06)
+- [ ] Per caller: train, quiz, 5 supervised calls, sign acknowledgement, log, add WAVV id
+      to ACQ_TRAINED_CALLERS
+- [ ] Fill program facts in DNC_PROCEDURES.md §1 (caller-ID numbers, SAN, vendors)
+- [ ] NJ telemarketer registration — DEFERRED by owner decision 2026-10-06; revisit
+- [ ] Counsel: unlicensed caller boundaries, multi-line abandonment before >1 line
 - [ ] MLS listing suppression for South Jersey (Bright MLS) — MOMLS only covers Monmouth/Ocean
 - [ ] GHL: PIT + Property custom object (UI) + `npm run ghl:provision` until clean;
       multiple-opps setting; conditional required fields; smart lists Q1-Q5 + Sum's views;
       2 workflows
-- [ ] WAVV: 12 dispositions (exact labels), recording + transcription ON, NO voicemail
-      recording, timezone + nuisance protection ON, 1 line, API key + webhook secret
+- [ ] WAVV: 12 dispositions (exact labels), recording + transcription ON, voicemail drop
+      disabled / no recording (owner confirmed plan 2026-10-06), timezone + nuisance protection ON, 1 line, API key + webhook secret
 - [ ] Vercel env: GHL_*, WAVV_*, ANTHROPIC_API_KEY
 - [ ] Pull BatchLeads (one export per cohort query) + Land Portal; `09 inspect` each;
       fix ALIASES for any unmapped header; `09 add`; scrub; `09 build`

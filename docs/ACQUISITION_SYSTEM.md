@@ -126,16 +126,17 @@ Legal (counsel and broker in writing; I'm not your lawyer):
   The AI flags any call where they do.
 - [ ] **Federal DNC registry subscription (SAN)** covering every area code dialed
   (first 5 free, then a per-area-code fee). The scrub vendor scrubs under YOUR SAN.
-- [ ] **NJ telemarketing registration** (Division of Consumer Affairs, N.J.S.A.
-  56:8-119 et seq.).
-  - Confidence: moderate that registration applies to these calls.
-  - I don't know whether a real-estate licensee exemption exists.
-  - Ask counsel.
+- [ ] **NJ telemarketer registration** (Division of Consumer Affairs, N.J.S.A.
+  56:8-119 et seq.; $150/yr for 1–5 lines; no real-estate exemption). **Deferred
+  by owner decision 2026-10-06** — revisit with counsel (whether intake-only
+  buy-side calls count as telemarketing sales calls).
 - [ ] **Litigator scrub account** (Blacklist Alliance / DNC.com or similar).
-- [ ] **Written DNC procedures + caller training** on file. This is the TSR/TCPA
-  safe harbor (written procedures, training, internal DNC list, registry access
-  ≤31 days). This doc and the script below are the core of it; keep a signed
-  training log in `compliance/`.
+- [x] **Written DNC procedures + caller training** — `compliance/DNC_PROCEDURES.md`
+  (the written policy, available on request), `compliance/CALLER_TRAINING.md`
+  (curriculum, role-plays, quiz, sign-off), `compliance/CALLER_ACKNOWLEDGEMENT.html`
+  (one-page sign-off form). Still to do per caller: train, sign, file in
+  `compliance/signed/`, log in `training_log.csv` (`10_acq_release.py
+  compliance-init` creates it), add the WAVV user id to `ACQ_TRAINED_CALLERS`.
 - [ ] **Recording disclosure at the start of every call.** NJ is one-party
   consent, but absentee owners live in all-party states (CA, FL, PA, WA, MD, MA,
   IL…). One sentence covers all of them.
@@ -164,6 +165,7 @@ python scripts/09_acq_ingest.py add ~/Downloads/batchleads_vacant_camden.csv \
 #            preforeclosure free_clear other_distress
 #            land_infill land_acreage land_strategic mpower_2019
 python scripts/09_acq_ingest.py build            # report: dupes, suppression, lanes, phones
+                                                 # (--dial-states NJ default: other states -> mail lane)
 python scripts/10_acq_release.py scrub-export    # unscrubbed / expiring numbers -> vendor
 python scripts/10_acq_release.py scrub-apply ~/Downloads/scrub_result.csv --source "DNC.com"
 python scripts/09_acq_ingest.py build
@@ -327,6 +329,7 @@ What `build` enforces:
 | `WAVV_API_KEY` | WAVV public API key (transcripts, reconciliation) |
 | `ANTHROPIC_API_KEY` | Claude call review (already used by the photo check) |
 | `GHL_COLD_SMS_DND` | `off` only if GHL rejects `dndSettings` on import (default on) |
+| `ACQ_TRAINED_CALLERS` | comma list of WAVV user ids with a signed training acknowledgement; any other caller's call is flagged as a violation |
 | `DATABASE_URL`, `CRON_SECRET`, `RESEND_API_KEY` / `SLACK_WEBHOOK_URL` | existing: call log, daily reconcile, alerts |
 
 ## 7. What happens after every disposition (implemented in `dispositions.ts`)

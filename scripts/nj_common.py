@@ -28,6 +28,22 @@ CACHE = ROOT / "data/cache"
 PROCESSED = ROOT / "data/processed"
 COMPLIANCE = ROOT / "compliance"
 
+# Append-only compliance logs (compliance/DNC_PROCEDURES.md §9). Created empty
+# by `05_mail_segments.py` / `10_acq_release.py compliance-init`; never
+# overwritten — corrections are new rows.
+COMPLIANCE_TEMPLATES = {
+    "dial_log.csv": "ts,ref_id,number,disposition,scrub_batch_date,agent\n",
+    "scrub_log.csv": "date,source,n_records,n_suppressed,file_hash,file\n",
+    "mail_returns.csv": "date,ref_id,usps_reason_code\n",
+    "optouts.csv": ("date_received,phone,name,property,channel,request_verbatim,"
+                    "received_by,ghl_suppressed_at,ref_id\n"),
+    "training_log.csv": ("date,caller_name,wavv_user_id,ghl_user_id,training_type,"
+                         "procedures_version,trainer,quiz_score,supervised_calls,"
+                         "acknowledgement_file,signed,next_refresher_due,notes\n"),
+    "incidents.csv": ("date,call_id,caller,code,description,action_taken,retrained,"
+                      "closed_date,reviewed_by\n"),
+}
+
 STATDATA_URL = "https://www.nj.gov/treasury/taxation/lpt/statdata.shtml"
 MODIV_URL_TPL = (
     "https://www.nj.gov/treasury/taxation/lpt/MODIV-Counties/{year}/{county}{yy}.zip"

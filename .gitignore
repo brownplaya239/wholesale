@@ -4,6 +4,9 @@ data/processed/
 data/cache/
 compliance/*.csv
 compliance/*.xlsx
+compliance/signed/
+compliance/skiptrace_raw/
+compliance/incidents/
 *.pkl
 __pycache__/
 .venv/

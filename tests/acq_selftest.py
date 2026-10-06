@@ -176,6 +176,14 @@ def test_acq(tmp: Path, check, ac, s09, s10) -> None:
     check(pat["call_window_et"] == "11a-9p ET" and pat["dial_lane"] == "power",
           "lane: TX owner -> CT/MT intersection window")
 
+    # --- dial-state gate: only cleared mailing states are callable
+    _, gated, _ = _quiet(s09.build, date.fromisoformat(AS_OF), False, {"NJ"})
+    G = gated.set_index("full_name")
+    check(G.loc["John Smith"]["dial_lane"] == "mail_only" and "PA not cleared" in G.loc["John Smith"]["lane_reason"],
+          "dial states: PA resident -> mail lane until PA is cleared")
+    check(G.loc["ACME HOLDINGS LLC"]["dial_lane"] == "power", "dial states: NJ resident stays callable")
+    check(G.loc["Jane Doe"]["dial_lane"] == "mail_only", "dial states: owner with no mailing (assumed NJ) not blocked by the gate")
+
     # --- persist + release
     ac.ACQ.mkdir(parents=True, exist_ok=True)
     props.to_parquet(ac.ACQ / "universe_properties.parquet", index=False)
@@ -208,6 +216,22 @@ def test_acq(tmp: Path, check, ac, s09, s10) -> None:
     _quiet(s10.cmd_scrub_apply, argparse.Namespace(file=str(rescrub), source="test-vendor", date="2026-10-02"))
     log = pd.read_csv(ac.COMPLIANCE / "scrub_log.csv")
     check(len(log) == 1 and int(log["n_suppressed"].iloc[0]) == 1, "scrub: batch logged to compliance/scrub_log.csv")
+    # append-only scrub log keeps whatever header the file was created with
+    old_log = ac.COMPLIANCE / "scrub_log.csv"
+    legacy = old_log.read_text().splitlines()
+    old_log.write_text("date,source,n_records,n_suppressed,file_hash\n")
+    ac.append_scrub_log("legacy-vendor", 3, 1, rescrub)
+    rows = old_log.read_text().splitlines()
+    check(len(rows) == 2 and rows[1].count(",") == 4 and "legacy-vendor (vendor_result.csv)" in rows[1],
+          "scrub log: row aligned to a legacy 5-column header")
+    old_log.write_text("\n".join(legacy) + "\n")
+    _quiet(s10.cmd_compliance_init, argparse.Namespace())
+    hdr = (ac.COMPLIANCE / "training_log.csv").read_text()
+    check(hdr.startswith("date,caller_name,wavv_user_id") and (ac.COMPLIANCE / "incidents.csv").exists(),
+          "compliance-init: training log + incident log created")
+    check((ac.COMPLIANCE / "optouts.csv").read_text().startswith("date,phone") and
+          len((ac.COMPLIANCE / "scrub_log.csv").read_text().splitlines()) > 1,
+          "compliance-init: existing logs never overwritten")
     props2, owners2, _ = _quiet(s09.build, date(2026, 10, 3), False)
     owners2.to_parquet(ac.ACQ / "universe_owners.parquet", index=False)
     props2.to_parquet(ac.ACQ / "universe_properties.parquet", index=False)

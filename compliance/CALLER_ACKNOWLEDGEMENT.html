@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Caller Training Acknowledgement</title>
+<!--
+  One per caller, per training (initial, refresher, remedial). Open in a
+  browser, click each blank to type, tick each box, then File > Print (or
+  Cmd/Ctrl+P) > Save as PDF, sign (pen or e-signature), and file as
+  compliance/signed/ack_<caller>_<date>.pdf. Log it in compliance/training_log.csv.
+-->
+<style>
+  :root { --ink: #1c2b39; --soft: #51616f; --line: #d8d2c4; --cream: #faf9f6; --accent: #b45309; }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+    color: var(--ink); background: #fff; max-width: 7.6in; margin: 0 auto;
+    padding: .5in .5in; font-size: 12.5px; line-height: 1.45;
+  }
+  @media print { body { padding: .15in 0; } .noprint { display: none; } }
+  header { display: flex; justify-content: space-between; align-items: baseline;
+    border-bottom: 3px solid var(--ink); padding-bottom: 10px; }
+  .brand { font-size: 20px; font-weight: 800; }
+  .brand .mid { color: var(--accent); }
+  .meta { text-align: right; font-size: 11px; color: var(--soft); }
+  h1 { font-size: 17px; margin: 14px 0 2px; }
+  .sub { color: var(--soft); font-size: 12px; margin-bottom: 10px; }
+  [contenteditable] { display: inline-block; min-width: 150px; border-bottom: 1.5px solid var(--accent);
+    padding: 0 4px; font-weight: 600; outline: none; }
+  [contenteditable]:empty::before { content: "________________"; color: #b9b2a3; font-weight: 400; }
+  table.facts { width: 100%; border-collapse: collapse; margin: 6px 0 12px; }
+  table.facts td { padding: 6px 8px; border: 1px solid var(--line); }
+  table.facts td.k { background: var(--cream); width: 30%; font-size: 12px; font-weight: 600; }
+  ol { padding-left: 0; list-style: none; counter-reset: a; }
+  ol li { counter-increment: a; display: flex; gap: 8px; padding: 5px 0; border-bottom: 1px solid #eee; }
+  ol li::before { content: "☐"; font-size: 15px; line-height: 1.2; }
+  ol li label { cursor: pointer; }
+  ol li input { display: none; }
+  ol li:has(input:checked)::before { content: "☑"; color: var(--accent); }
+  .sig { margin-top: 26px; display: flex; gap: 32px; font-size: 11px; color: var(--soft); }
+  .sig div { flex: 1; border-top: 1px solid var(--ink); padding-top: 4px; }
+  .foot { margin-top: 14px; font-size: 10px; color: var(--soft); }
+  .noprint { background: var(--cream); border: 1px dashed var(--line); border-radius: 8px;
+    padding: 8px 12px; margin-bottom: 14px; font-size: 11px; color: var(--soft); }
+</style>
+</head>
+<body>
+  <p class="noprint">Click blanks to type and boxes to tick, then print or save as PDF and sign. This note doesn't print.</p>
+
+  <header>
+    <div class="brand">House<span class="mid">Sold</span>NJ</div>
+    <div class="meta">
+      Calls on behalf of Sumeet Sancheti · NJ Licensed Real Estate Salesperson #2082408<br>
+      Coldwell Banker Realty · 335 Route 9 South, Manalapan, NJ 07726
+    </div>
+  </header>
+
+  <h1>Caller Training Acknowledgement</h1>
+  <p class="sub">Written Do-Not-Call &amp; Outbound Calling Procedures (compliance/DNC_PROCEDURES.md)</p>
+
+  <table class="facts">
+    <tr><td class="k">Caller name</td><td><span contenteditable></span></td></tr>
+    <tr><td class="k">WAVV user id / GHL user</td><td><span contenteditable></span> / <span contenteditable></span></td></tr>
+    <tr><td class="k">Training type</td><td><span contenteditable>Initial</span> (initial / refresher / remedial)</td></tr>
+    <tr><td class="k">Procedures version</td><td><span contenteditable>1.0</span></td></tr>
+    <tr><td class="k">Training date · trainer</td><td><span contenteditable></span> · <span contenteditable>Sumeet Sancheti</span></td></tr>
+    <tr><td class="k">Quiz score · supervised calls</td><td><span contenteditable></span> / 12 · <span contenteditable></span> calls, zero compliance errors</td></tr>
+  </table>
+
+  <p><b>I confirm that I have read the procedures, completed the training, and will:</b></p>
+  <ol>
+    <li><label><input type="checkbox">Dial only from my assigned GHL/WAVV queues — never from a personal phone, a spreadsheet, or a number I typed in by hand.</label></li>
+    <li><label><input type="checkbox">Call only Monday–Saturday, 9:00 am–8:00 pm in the owner's time zone; never on Sundays or federal holidays.</label></li>
+    <li><label><input type="checkbox">Open every call with my name, that I'm calling for Sumeet Sancheti, a licensed real estate agent with Coldwell Banker Realty, that the call may be recorded, and the property.</label></li>
+    <li><label><input type="checkbox">Honor every request not to be called the moment it is made — no arguing or persuading — and disposition it DNC immediately.</label></li>
+    <li><label><input type="checkbox">Pass any opt-out I receive outside a call (callback, text, email) to Sumeet the same day.</label></li>
+    <li><label><input type="checkbox">Never use or upload a pre-recorded voicemail, artificial or AI voice, and never text or email cold contacts.</label></li>
+    <li><label><input type="checkbox">Never state a price, offer, price range, commission, or listing terms.</label></li>
+    <li><label><input type="checkbox">End the call when a property is listed with an agent, and disposition it Already Listed.</label></li>
+    <li><label><input type="checkbox">Never dial a contact marked DNC, suppressed, or otherwise out of my queue — and report it if I see one.</label></li>
+    <li><label><input type="checkbox">Record truthful dispositions and qualification fields, with notes within 5 minutes.</label></li>
+    <li><label><input type="checkbox">Understand that every call is recorded, automatically checked, and reviewed, and that violations lead to retraining or removal from calling.</label></li>
+  </ol>
+
+  <div class="sig">
+    <div>Caller signature · date</div>
+    <div>Trainer (compliance owner) signature · date</div>
+  </div>
+  <p class="foot">File as compliance/signed/ack_&lt;caller&gt;_&lt;date&gt;.pdf · log in compliance/training_log.csv · add the WAVV user id to ACQ_TRAINED_CALLERS · retain 7 years after the caller leaves.</p>
+</body>
+</html>

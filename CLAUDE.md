@@ -110,6 +110,11 @@ BatchLeads pull adds Camden, Mercer, Atlantic, Cumberland, Ocean, Burlington, Gl
   `site/src/components/RoleDisclosure.tsx` is the canonical wording. Never
   start as listing agent and then buy or assign without separate written,
   informed consent.
+- `compliance/DNC_PROCEDURES.md` is the binding written calling policy; no caller dials
+  before training + a signed acknowledgement (`compliance/CALLER_TRAINING.md`) and their
+  WAVV id is in `ACQ_TRAINED_CALLERS`. Only cleared mailing states are callable
+  (`09 build --dial-states`, default NJ). NJ telemarketer registration: deferred by
+  owner decision 2026-10-06 — open item.
 - Every dial/scrub/consent event gets logged to `compliance/` before outreach scales
   (dial log: `/api/admin/acq/export?kind=calls`; scrubs: `10 scrub-apply` appends
   scrub_log.csv; internal DNC: `acq_suppression` table, append-only).

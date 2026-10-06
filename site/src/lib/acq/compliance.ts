@@ -6,6 +6,7 @@
  *   - outside 8am-9pm in ANY time zone the owner may be in (47 CFR 64.1200(c)(1))
  *   - a cold contact dialed with no DNC scrub on file, or one > 31 days old
  *   - a contact the system had suppressed (DNC / mail-only / recycled) was dialed
+ *   - the caller has no signed training acknowledgement (ACQ_TRAINED_CALLERS)
  *  policy (our tighter rule, Mon-Sat 9am-8pm local, no Sunday/federal holiday)
  *  warning: number not on the contact record; human answered but 0 s talk
  *   (a dropped/abandoned connect — the 3%-per-30-days cap is computed from these)
@@ -93,11 +94,22 @@ export type AuditInput = {
   scrubDate: string | null;
   phones: string[];
   inboundConsent: boolean;
+  /** false = caller is not on the signed training log (ACQ_TRAINED_CALLERS); null = check off. */
+  callerTrained?: boolean | null;
 };
+
+/** WAVV user ids of callers with a signed training acknowledgement (compliance/CALLER_TRAINING.md). */
+export function trainedCallers(env = process.env.ACQ_TRAINED_CALLERS): Set<string> | null {
+  const ids = (env ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  return ids.length ? new Set(ids) : null;
+}
 
 export function auditCall(a: AuditInput): Flag[] {
   if (a.direction === "inbound") return []; // they called us
   const flags = callWindowFlags(a.at, a.zones);
+  if (a.callerTrained === false) {
+    flags.push({ severity: "violation", code: "caller_not_trained", detail: "caller is not on the signed training log (ACQ_TRAINED_CALLERS)" });
+  }
   const lane = a.lane ?? "";
   if (SUPPRESSED_LANES.has(lane) || a.tags.includes("dnc")) {
     flags.push({ severity: "violation", code: "dialed_suppressed_contact", detail: `contact lane "${lane || "?"}"${a.tags.includes("dnc") ? " + dnc tag" : ""}` });

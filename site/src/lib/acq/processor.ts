@@ -13,7 +13,7 @@ import { fanOut, reportUrl } from "@/lib/leads/notify";
 import { saveFullLead } from "@/lib/leads/store";
 import { assignWorkflow } from "@/lib/enrich/insights";
 import { extractIntel, planIntel } from "./callIntel";
-import { auditCall, type Flag } from "./compliance";
+import { auditCall, trainedCallers, type Flag } from "./compliance";
 import { dispositionKey, planDisposition, type ContactState, type OppState, type Plan } from "./dispositions";
 import { ghlFromEnv, type Ghl, type GhlContact } from "./ghl";
 import { PIPELINES, TAGS, type DispositionKey, type PipelineKey } from "./schema";
@@ -226,6 +226,7 @@ export async function processEnded(db: Db, id: string): Promise<string> {
       scrubDate: (ctx.fields["DNC Scrub Date"] as string) || null,
       phones: cs.phones,
       inboundConsent: ctx.fields["SMS Consent"] === "Web form consent",
+      callerTrained: ((t) => (t ? Boolean(call.userId && t.has(call.userId)) : null))(trainedCallers()),
     });
     const plan = planDisposition(key, { at, human: call.human, seconds: call.seconds ?? 0, dialed, userId: call.userId }, cs, ctx.opp);
     const oppId = await applyPlan(db, ctx, plan, call);

@@ -6,6 +6,7 @@
       [--pull-date 2026-10-01] [--skip-trace batchskiptracing]
       register a pull in data/raw/acq/manifest.csv (one file per cohort query)
   python scripts/09_acq_ingest.py build [--trust-vendor-scrub] [--as-of YYYY-MM-DD]
+      [--dial-states NJ,PA | ALL]
       merge every registered pull -> data/processed/acq/universe_{properties,owners}.parquet
 
 What `build` enforces (the rules that keep the GHL database clean):
@@ -25,13 +26,16 @@ What `build` enforces (the rules that keep the GHL database clean):
     flag count as the scrub; that is only defensible if the vendor scrubbed
     under YOUR registry subscription (SAN) — see docs/ACQUISITION_SYSTEM.md;
   - every owner gets a lane: power (multi-line OK), manual (single-line only:
-    FL/OK/MD residents or area codes), mail_only (no callable phone), and a
-    call window on the caller's clock (ET).
+    FL/OK/MD residents or area codes), mail_only (no callable phone, or a
+    mailing state not yet cleared for calling — default only NJ is cleared,
+    compliance/DNC_PROCEDURES.md §4.4), and a call window on the caller's
+    clock (ET).
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import sys
@@ -339,7 +343,10 @@ def signals_label(p: dict, out_of_state: bool) -> list[str]:
     return out
 
 
-def build(as_of: date, trust_vendor_scrub: bool) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
+def build(as_of: date, trust_vendor_scrub: bool,
+          dial_states: set[str] | None = None) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
+    """dial_states: mailing states cleared for calling (state DNC list scrubbed,
+    registration handled); owners elsewhere go to the mail lane. None = all."""
     if not ac.MANIFEST.exists():
         raise SystemExit("No pulls registered — run `09_acq_ingest.py add FILE ...` first.")
     man = pd.read_csv(ac.MANIFEST, dtype=str).fillna("")
@@ -443,8 +450,11 @@ def build(as_of: date, trust_vendor_scrub: bool) -> tuple[pd.DataFrame, pd.DataF
         callable_ = [p["number"] for p in out_phones if p["status"] == "clean"]
         zones = ac.zones_for(o.mailing_state) or (ac.zones_for("NJ") if o.mailing_inferred or not o.mailing_state else ())
         w = ac.window_et(zones, as_of)
+        mstate = "NJ" if o.mailing_inferred else (o.mailing_state or "")
         if o.property_count == 0:
             lane, why = "suppressed", "every property suppressed"
+        elif dial_states is not None and mstate not in dial_states:
+            lane, why = "mail_only", f"mailing state {mstate or '?'} not cleared for calling"
         elif not callable_:
             statuses = sorted({p["status"] for p in out_phones}) or ["no phone"]
             lane, why = "mail_only", "no callable phone (" + ", ".join(statuses) + ")"
@@ -517,6 +527,8 @@ def main() -> None:
     p.add_argument("--provider", required=True); p.add_argument("--cohort", required=True)
     p.add_argument("--pull-date"); p.add_argument("--skip-trace")
     p = sub.add_parser("build"); p.add_argument("--as-of"); p.add_argument("--trust-vendor-scrub", action="store_true")
+    p.add_argument("--dial-states", default=os.environ.get("ACQ_DIAL_STATES", "NJ"),
+                   help="comma list of mailing states cleared for calling, or ALL (default NJ)")
     args = ap.parse_args()
     if args.cmd == "inspect":
         cmd_inspect(args.file)
@@ -524,7 +536,10 @@ def main() -> None:
         cmd_add(args.file, args.provider, args.cohort, args.pull_date, args.skip_trace)
     else:
         as_of = date.fromisoformat(args.as_of) if args.as_of else date.today()
-        props, owners, stats = build(as_of, args.trust_vendor_scrub)
+        states = None if args.dial_states.strip().upper() == "ALL" else {
+            x.strip().upper() for x in args.dial_states.split(",") if x.strip()}
+        print(f"Dial states: {'ALL' if states is None else ', '.join(sorted(states))}")
+        props, owners, stats = build(as_of, args.trust_vendor_scrub, states)
         ac.ACQ.mkdir(parents=True, exist_ok=True)
         props.to_parquet(ac.ACQ / "universe_properties.parquet", index=False)
         owners.to_parquet(ac.ACQ / "universe_owners.parquet", index=False)

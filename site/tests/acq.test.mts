@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { dispositionKey, MAX_ATTEMPTS, missingQualification, planDisposition, type ContactState, type OppState } from "../src/lib/acq/dispositions.ts";
-import { auditCall, callWindowFlags, isFederalHoliday } from "../src/lib/acq/compliance.ts";
+import { auditCall, callWindowFlags, isFederalHoliday, trainedCallers } from "../src/lib/acq/compliance.ts";
 import { verifyWavvSignature } from "../src/lib/acq/wavv.ts";
 import { formatIntel, planIntel, type CallIntel } from "../src/lib/acq/callIntel.ts";
 import { Ghl } from "../src/lib/acq/ghl.ts";
@@ -186,6 +186,15 @@ test("audit: suppressed contact, missing/expired scrub, inbound consent exemptio
   assert.ok(auditCall({ ...base, seconds: 0 }).some((f) => f.code === "possible_abandoned"));
   assert.ok(auditCall({ ...base, dialed: "6095550000" }).some((f) => f.code === "number_not_on_record"));
   assert.deepEqual(auditCall({ ...base, direction: "inbound", lane: "suppressed" }), []);
+});
+
+test("audit: a caller without a signed training acknowledgement is a violation", () => {
+  const base = { at: TUE, direction: "outbound", dialed: "8562221111", human: true, seconds: 90, lane: "power", tags: [], zones: ["America/New_York"], scrubDate: "2026-10-01", phones: ["8562221111"], inboundConsent: false };
+  assert.deepEqual(auditCall({ ...base, callerTrained: null }), [], "check off when no list is configured");
+  assert.deepEqual(auditCall({ ...base, callerTrained: true }), []);
+  assert.ok(auditCall({ ...base, callerTrained: false }).some((f) => f.code === "caller_not_trained" && f.severity === "violation"));
+  assert.equal(trainedCallers(""), null);
+  assert.deepEqual([...trainedCallers(" u1, u2 ,")!], ["u1", "u2"]);
 });
 
 // ----------------------------------------------------------------- WAVV --
