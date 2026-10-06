@@ -20,7 +20,9 @@ export type StreetViewMeta = {
   date: string | null;
 };
 
-const googleKey = () => process.env.NEXT_PUBLIC_GOOGLE_PLACES_KEY || "";
+// Server requests use a separately restricted key when configured. Keep the
+// existing public-key fallback for older deployments during migration.
+const googleKey = () => process.env.GOOGLE_MAPS_SERVER_KEY || process.env.NEXT_PUBLIC_GOOGLE_PLACES_KEY || "";
 const secret = () => process.env.CRON_SECRET || process.env.ADMIN_PASSWORD || "";
 
 function sig(id: string, kind: string, v: string): string {

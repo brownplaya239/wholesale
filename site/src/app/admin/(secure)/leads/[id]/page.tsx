@@ -358,6 +358,9 @@ export default async function LeadReport({
 
         {/* 2 */}
         <Card n={2} title="Property image & map">
+          <Link href={`/admin/driving-for-dollars?lead=${encodeURIComponent(lead.id)}`} className="mb-3 inline-flex rounded-lg border border-line px-3 py-2 text-sm font-semibold hover:bg-cream">
+            Inspect in driving-for-dollars workspace →
+          </Link>
           {g ? (
             <div className="space-y-3">
               <StreetView lat={g.lat} lng={g.lng} />
