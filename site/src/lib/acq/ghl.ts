@@ -276,6 +276,17 @@ export class Ghl {
     return this.req<{ opportunity: GhlOpportunity }>("PUT", `/opportunities/${id}`, { body });
   }
 
+  // --------------------------------------------------------------- users --
+  /** Needs the users.readonly scope. */
+  async listUsers(): Promise<{ id: string; name?: string; firstName?: string; lastName?: string; email?: string; roles?: { role?: string } }[]> {
+    const r = await this.req<{ users?: { id: string; name?: string; firstName?: string; lastName?: string; email?: string; roles?: { role?: string } }[] }>(
+      "GET",
+      "/users/",
+      { query: { locationId: this.locationId } }
+    );
+    return r.users ?? [];
+  }
+
   // ----------------------------------------------------------- workflows --
   async listWorkflows(): Promise<{ id: string; name: string; status?: string }[]> {
     const r = await this.req<{ workflows?: { id: string; name: string; status?: string }[] }>("GET", "/workflows/", {

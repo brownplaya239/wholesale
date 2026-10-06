@@ -225,7 +225,8 @@ What `build` enforces:
    - locations/customFields: read and write;
    - objects/schema, objects/record: read and write;
    - associations, associations/relation: read and write;
-   - workflows.readonly, locations.readonly.
+   - workflows.readonly, locations.readonly, users.readonly (lets `npm run
+     ghl:check` list user ids for `GHL_OWNER_USER_ID` and the callers).
    Put it in `site/.env.local` as `GHL_TOKEN` and `GHL_LOCATION_ID` (also in
    Vercel).
 2. **Property custom object (UI only — the API needs an agency token).**

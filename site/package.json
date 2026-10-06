@@ -9,7 +9,8 @@
     "lint": "next lint",
     "test:unit": "tsx --test tests/unit.test.mts tests/acq.test.mts",
     "ghl:provision": "tsx scripts/ghl-provision.ts",
-    "ghl:push": "tsx scripts/ghl-push.ts"
+    "ghl:push": "tsx scripts/ghl-push.ts",
+    "ghl:check": "tsx scripts/ghl-check.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",

@@ -13,7 +13,7 @@
  * Needs GHL_TOKEN (sub-account Private Integration Token) + GHL_LOCATION_ID in
  * site/.env.local or the environment. PIT scopes: contacts, opportunities,
  * locations/customFields, objects/schema, objects/record, associations,
- * associations/relation, workflows.readonly, locations.readonly.
+ * associations/relation, workflows.readonly, locations.readonly, users.readonly.
  */
 import { Ghl, GhlError } from "../src/lib/acq/ghl";
 import {
