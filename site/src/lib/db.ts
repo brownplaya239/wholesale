@@ -12,9 +12,18 @@ export type Db = {
   q<T = Record<string, unknown>>(text: string, params?: unknown[]): Promise<T[]>;
 };
 
-const SCHEMA_VERSION = "4";
+const SCHEMA_VERSION = "5";
 
 const SCHEMA: string[] = [
+  `CREATE TABLE IF NOT EXISTS inspection_properties (
+    id text PRIMARY KEY, data jsonb NOT NULL, review jsonb,
+    revision int NOT NULL DEFAULT 1, reviewed_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE TABLE IF NOT EXISTS inspection_review_events (
+    id bigserial PRIMARY KEY, property_id text NOT NULL REFERENCES inspection_properties(id),
+    review jsonb NOT NULL, revision int NOT NULL, created_at timestamptz NOT NULL DEFAULT now()
+  )`,
   `CREATE TABLE IF NOT EXISTS app_meta (key text PRIMARY KEY, value text NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS leads (
     id text PRIMARY KEY,
