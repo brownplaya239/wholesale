@@ -185,62 +185,93 @@ export const QUALIFICATION_FIELDS = [
   "Next Follow Up",
 ] as const;
 
+/**
+ * A Property attribute the pipeline knows (`id`) mapped onto a field in the
+ * GHL Property object. Matched at runtime by label (`name`, then `aliases`);
+ * values are converted to whatever type the live field has. Tiers:
+ *   core     — already in Sum's "Property Details" build (never created by us)
+ *   required — the provisioner adds it (Acq Property ID = idempotency key)
+ *   extra    — added only with `npm run ghl:provision -- --with-extras`
+ */
+export type PropField = {
+  id: string;
+  name: string;
+  aliases?: readonly string[];
+  type: FieldType;
+  options?: readonly string[];
+  tier: "core" | "required" | "extra";
+};
+
+const CHECK = ["Yes"] as const;
+
 export const PROPERTY_OBJECT = {
+  /** Default key; the live key is found by the object's label ("Property"). */
   key: "custom_objects.property",
   singular: "Property",
   plural: "Properties",
-  primary: { name: "Property Address", key: "property_address" },
+  primary: { id: "address", name: "Property Address" },
   fields: [
-    { name: "Acq Property ID", type: "TEXT" },
-    { name: "City", type: "TEXT" },
-    { name: "ZIP", type: "TEXT" },
-    { name: "County", type: "TEXT" },
-    { name: "Municipality", type: "TEXT" },
-    { name: "APN", type: "TEXT" },
-    { name: "Block", type: "TEXT" },
-    { name: "Lot", type: "TEXT" },
-    { name: "Asset Class", type: "SINGLE_OPTIONS", options: ["residential", "land"] },
-    { name: "Property Type", type: "TEXT" },
-    { name: "Units", type: "NUMERICAL" },
-    { name: "Beds", type: "NUMERICAL" },
-    { name: "Baths", type: "NUMERICAL" },
-    { name: "Sqft", type: "NUMERICAL" },
-    { name: "Acres", type: "NUMERICAL" },
-    { name: "Year Built", type: "NUMERICAL" },
-    { name: "Estimated Value", type: "NUMERICAL" },
-    { name: "Mortgage Estimate", type: "NUMERICAL" },
-    { name: "Equity Pct", type: "NUMERICAL" },
-    { name: "Ownership Years", type: "NUMERICAL" },
-    { name: "Last Sale Date", type: "DATE" },
-    { name: "Last Sale Price", type: "NUMERICAL" },
-    { name: "Vacant", type: "SINGLE_OPTIONS", options: YN },
-    { name: "Absentee", type: "SINGLE_OPTIONS", options: YN },
-    { name: "Tax Delinquent", type: "SINGLE_OPTIONS", options: YN },
-    { name: "Preforeclosure", type: "SINGLE_OPTIONS", options: YN },
-    { name: "Inherited", type: "SINGLE_OPTIONS", options: YN },
-    { name: "Free And Clear", type: "SINGLE_OPTIONS", options: YN },
-    { name: "Code Violation", type: "SINGLE_OPTIONS", options: YN },
-    { name: "Wetlands Pct", type: "NUMERICAL" },
-    { name: "Flood Zone", type: "TEXT" },
-    { name: "Flood Pct", type: "NUMERICAL" },
-    { name: "Road Frontage Ft", type: "NUMERICAL" },
-    { name: "Landlocked", type: "SINGLE_OPTIONS", options: YN },
-    { name: "Slope Pct", type: "NUMERICAL" },
-    { name: "MLS Status", type: "TEXT" },
-    { name: "Source Lists", type: "TEXT" },
-    { name: "Source Provider", type: "TEXT" },
-    { name: "Pull Date", type: "DATE" },
-    { name: "Skip Trace Provider", type: "TEXT" },
-    { name: "Lead Score", type: "NUMERICAL" },
-    { name: "Score Reasons", type: "LARGE_TEXT" },
-    { name: "Signals", type: "TEXT" },
-    {
-      name: "Property Status",
-      type: "SINGLE_OPTIONS",
-      options: ["Active", "Listed elsewhere - recheck", "Sold", "Under contract (ours)", "Closed (ours)"],
-    },
-  ] as readonly FieldDef[],
+    // core — the 28-field "Property Details" build (primary = Property Address)
+    { id: "county", name: "County", type: "TEXT", tier: "core" },
+    { id: "municipality", name: "Municipality", type: "TEXT", tier: "core" },
+    { id: "zip", name: "ZIP", aliases: ["Zip Code", "ZIP Code"], type: "TEXT", tier: "core" },
+    { id: "block", name: "Block", type: "TEXT", tier: "core" },
+    { id: "lot", name: "Lot", type: "TEXT", tier: "core" },
+    { id: "apn", name: "APN/Parcel ID", aliases: ["APN", "Parcel ID", "APN Parcel ID"], type: "TEXT", tier: "core" },
+    { id: "asset_class", name: "Residential/Vacant Land", aliases: ["Asset Class", "Residential or Vacant Land"], type: "SINGLE_OPTIONS", options: ["Residential", "Vacant Land"], tier: "core" },
+    { id: "property_type", name: "Property Type", type: "TEXT", tier: "core" },
+    { id: "occupancy", name: "Occupancy", type: "SINGLE_OPTIONS", options: ["Owner-occupied", "Tenant-occupied", "Vacant", "Unknown"], tier: "core" },
+    { id: "est_value", name: "Estimated Value", type: "NUMERICAL", tier: "core" },
+    { id: "mortgage_estimate", name: "Mortgage Estimate", type: "NUMERICAL", tier: "core" },
+    { id: "equity_pct", name: "Equity %", aliases: ["Equity Pct", "Equity Percent", "Equity"], type: "NUMERICAL", tier: "core" },
+    { id: "acres", name: "Acres", type: "NUMERICAL", tier: "core" },
+    { id: "ownership_years", name: "Ownership Years", type: "NUMERICAL", tier: "core" },
+    { id: "wetlands_pct", name: "Wetlands %", aliases: ["Wetlands Pct", "Wetlands"], type: "NUMERICAL", tier: "core" },
+    { id: "road_frontage_ft", name: "Road Frontage", aliases: ["Road Frontage Ft"], type: "NUMERICAL", tier: "core" },
+    { id: "vacant", name: "Vacancy", aliases: ["Vacant", "Vacancy Flag"], type: "CHECKBOX", options: CHECK, tier: "core" },
+    { id: "absentee", name: "Absentee", aliases: ["Absentee Flag"], type: "CHECKBOX", options: CHECK, tier: "core" },
+    { id: "tax_delinquent", name: "Tax Delinquency", aliases: ["Tax Delinquent", "Tax Delinquency Flag"], type: "CHECKBOX", options: CHECK, tier: "core" },
+    { id: "preforeclosure", name: "Foreclosure", aliases: ["Preforeclosure", "Foreclosure Flag"], type: "CHECKBOX", options: CHECK, tier: "core" },
+    { id: "inherited", name: "Inherited", aliases: ["Inherited Flag"], type: "CHECKBOX", options: CHECK, tier: "core" },
+    { id: "free_clear", name: "Free & Clear", aliases: ["Free And Clear", "Free and Clear"], type: "CHECKBOX", options: CHECK, tier: "core" },
+    { id: "flood", name: "Flood", aliases: ["Flood Flag"], type: "CHECKBOX", options: CHECK, tier: "core" },
+    { id: "source_provider", name: "Source Provider", type: "TEXT", tier: "core" },
+    { id: "original_list", name: "Original List", aliases: ["Source Lists", "Source List"], type: "TEXT", tier: "core" },
+    { id: "pull_date", name: "Pull Date", type: "DATE", tier: "core" },
+    { id: "skip_trace_provider", name: "Skip-Trace Provider", aliases: ["Skip Trace Provider"], type: "TEXT", tier: "core" },
+    // required — idempotent updates find records by it (mark it searchable)
+    { id: "acq_property_id", name: "Acq Property ID", type: "TEXT", tier: "required" },
+    // extras — data the pull already has that would otherwise be dropped
+    { id: "lead_score", name: "Lead Score", type: "NUMERICAL", tier: "extra" },
+    { id: "signals", name: "Signals", type: "TEXT", tier: "extra" },
+    { id: "last_sale_date", name: "Last Sale Date", type: "DATE", tier: "extra" },
+    { id: "last_sale_price", name: "Last Sale Price", type: "NUMERICAL", tier: "extra" },
+    { id: "beds", name: "Beds", type: "NUMERICAL", tier: "extra" },
+    { id: "baths", name: "Baths", type: "NUMERICAL", tier: "extra" },
+    { id: "sqft", name: "Sqft", aliases: ["Square Feet"], type: "NUMERICAL", tier: "extra" },
+    { id: "year_built", name: "Year Built", type: "NUMERICAL", tier: "extra" },
+    { id: "units", name: "Units", type: "NUMERICAL", tier: "extra" },
+    { id: "mls_status", name: "MLS Status", type: "TEXT", tier: "extra" },
+    { id: "landlocked", name: "Landlocked", type: "CHECKBOX", options: CHECK, tier: "extra" },
+    { id: "slope_pct", name: "Slope %", aliases: ["Slope Pct", "Slope"], type: "NUMERICAL", tier: "extra" },
+    { id: "flood_zone", name: "Flood Zone", type: "TEXT", tier: "extra" },
+  ] as readonly PropField[],
 } as const;
+
+/** BatchLeads / Land Portal cohort keys -> the "Original List" label. */
+export const COHORT_LABELS: Record<string, string> = {
+  vacant_equity: "Vacant + equity",
+  tax_delinquent: "Tax delinquent",
+  absentee_landlord: "Absentee / tired landlord",
+  inherited: "Inherited / estate",
+  preforeclosure: "Preforeclosure",
+  free_clear: "Free & clear",
+  other_distress: "Other distress",
+  land_infill: "Land: infill 0.10-2 ac",
+  land_acreage: "Land: 2-10 ac",
+  land_strategic: "Land: strategic",
+  mpower_2019: "M-Power 2019 (resolved)",
+};
 
 export const CONTACT_PROPERTY_ASSOCIATION = { key: "owner_property", first: "Owner", second: "Property" } as const;
 
@@ -297,7 +328,7 @@ export const PIPELINES: Record<
       "Under Contract / Option",
       "DD / Entitlement",
       "Disposition",
-      "Closed Won",
+      "Closed",
     ],
     roles: {
       new: "New / Ready to Call",
@@ -309,6 +340,19 @@ export const PIPELINES: Record<
       booked: "Consultation",
     },
   },
+};
+
+/**
+ * Stage names are matched ignoring spaces/punctuation ("New/Ready to Call" ==
+ * "New / Ready to Call"); these cover wording differences in a hand-built pipeline.
+ */
+export const STAGE_ALIASES: Record<string, readonly string[]> = {
+  "Closed Won": ["Closed"],
+  Closed: ["Closed Won"],
+  "DD / Entitlement": ["DD", "Due Diligence"],
+  "Title / DD": ["Title", "Title/Due Diligence"],
+  "Under Contract / Option": ["Under Contract"],
+  "Underwriting / Feasibility": ["Underwriting"],
 };
 
 /** Stages at or past which the middleware never moves a card backwards. */

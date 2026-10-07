@@ -5,6 +5,7 @@
  */
 import { Ghl, GhlError } from "../src/lib/acq/ghl";
 import { PIPELINES, PROPERTY_OBJECT } from "../src/lib/acq/schema";
+import { findPropertyObject, matchPropertyFields } from "../src/lib/acq/sync";
 import { Wavv } from "../src/lib/acq/wavv";
 import { loadEnv } from "./env";
 
@@ -37,9 +38,12 @@ async function main() {
     const want = Object.values(PIPELINES).map((x) => x.name);
     return `${p.length} found; ours present: ${want.map((w) => `${w}=${p.some((x) => x.name === w) ? "yes" : "no"}`).join(", ")}`;
   });
-  await step(`custom object ${PROPERTY_OBJECT.key}`, async () => {
-    await ghl.getObject(PROPERTY_OBJECT.key);
-    return "exists";
+  await step(`custom object "${PROPERTY_OBJECT.singular}"`, async () => {
+    const o = await findPropertyObject(ghl);
+    if (!o.key) throw new Error("not found (create it, or set GHL_PROPERTY_OBJECT_KEY)");
+    const { map, missing } = matchPropertyFields(o.fields);
+    const core = missing.filter((d) => d.tier === "core").map((d) => d.name);
+    return `${o.key}, ${o.fields.length} fields; ${map.size} mapped; core not found: ${core.length ? core.join(", ") : "none"}`;
   });
   await step("users (needs users.readonly)", async () => {
     const u = await ghl.listUsers();

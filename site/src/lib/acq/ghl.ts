@@ -54,6 +54,15 @@ export type GhlOpportunity = {
 };
 
 export type GhlField = { id: string; name: string; fieldKey?: string; dataType?: string; model?: string };
+export type GhlObjectField = {
+  id?: string;
+  name: string;
+  fieldKey: string;
+  dataType?: string;
+  options?: ({ key?: string; label?: string } | string)[];
+  parentId?: string;
+};
+export type GhlObjectSchema = { id?: string; key: string; labels?: { singular?: string; plural?: string } };
 export type GhlPipeline = { id: string; name: string; stages: { id: string; name: string }[] };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -174,7 +183,7 @@ export class Ghl {
     });
   }
   listObjectFields(objectKey: string) {
-    return this.req<{ fields?: GhlField[]; folders?: { id: string; name: string }[] }>(
+    return this.req<{ fields?: GhlObjectField[]; folders?: { id: string; name: string }[] }>(
       "GET",
       `/custom-fields/object-key/${encodeURIComponent(objectKey)}`,
       { query: { locationId: this.locationId } }
@@ -205,6 +214,17 @@ export class Ghl {
   }
 
   // ------------------------------------------------------ custom objects --
+  async listObjects(): Promise<GhlObjectSchema[]> {
+    const r = await this.req<{ objects?: GhlObjectSchema[] }>("GET", "/objects/", { query: { locationId: this.locationId } });
+    return r.objects ?? [];
+  }
+  getRecord(key: string, id: string) {
+    return this.req<{ record?: { id: string; properties?: Record<string, unknown> } }>(
+      "GET",
+      `/objects/${encodeURIComponent(key)}/records/${id}`,
+      { query: { locationId: this.locationId } }
+    );
+  }
   getObject(key: string) {
     return this.req<{ object?: { id: string; key: string } }>("GET", `/objects/${encodeURIComponent(key)}`, {
       query: { locationId: this.locationId },

@@ -230,15 +230,25 @@ What `build` enforces:
    Put it in `site/.env.local` as `GHL_TOKEN` and `GHL_LOCATION_ID` (also in
    Vercel).
 2. **Property custom object (UI only — the API needs an agency token).**
-   Settings → Objects → Create:
-   - singular *Property*, plural *Properties*, key `property`;
-   - primary display field **Property Address** (text).
-3. `cd site && npm run ghl:provision`. It creates:
-   - every contact and opportunity field;
-   - both pipelines with exact stage names;
-   - the Property fields and the contact↔property association.
-   It then prints the leftover manual steps. Re-run until it's clean. Mark
-   **Acq Property ID** searchable.
+   **Done 2026-10-07:** *Property*, primary **Property Address**, 27 more
+   fields under "Property Details". Flags are checkboxes. Both pipelines were
+   built by hand too. The code maps onto this build by label: `Equity %`,
+   `APN/Parcel ID`, `Free & Clear`, `New/Ready to Call`, land ending in
+   `Closed` are all fine. It never creates a duplicate of a field that exists.
+3. `cd site && npm run ghl:check`, then `npm run ghl:provision -- --dry-run`,
+   then for real. It:
+   - creates every contact and opportunity field;
+   - creates a pipeline only if it is missing (yours match);
+   - on Property, maps your 28 fields and adds only **Acq Property ID**, the
+     key used to update records in place, in an "Acquisition System" folder;
+   - with `--with-extras`, also adds Lead Score, Signals, Last Sale Date/Price,
+     Beds, Baths, Sqft, Year Built, Units, MLS Status, Landlocked, Slope % and
+     Flood Zone. Otherwise that data is dropped.
+   - creates the contact↔property association.
+   It prints any of your fields it could not map and the leftover manual
+   steps. Re-run until it's clean. Mark **Acq Property ID** searchable. On the
+   test batch use `ghl:push -- ... --limit 25 --verify`: it reads records back
+   and lists any value GHL silently dropped.
 4. **Settings → Objects → Opportunities:** enable **Allow Multiple Opportunities
    per Contact**.
 5. **Labs → "Show & Require Opportunity Fields Conditionally"**. Make these

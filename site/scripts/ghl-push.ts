@@ -1,5 +1,7 @@
 /**
- * npm run ghl:push -- ../data/processed/acq/waves/W01.jsonl [--dry-run] [--limit N] [--force]
+ * npm run ghl:push -- ../data/processed/acq/waves/W01.jsonl [--dry-run] [--limit N] [--verify] [--force]
+ *   --verify  read the first 3 property records back and list any value GHL
+ *             silently dropped (wrong option label, wrong type) — use on the test batch
  *
  * Pushes a wave (or a patch_*.jsonl) from scripts/10_acq_release.py into
  * GHL: contact + property records + association + one opportunity per
@@ -10,7 +12,7 @@
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";
 import { Ghl } from "../src/lib/acq/ghl";
-import { pushOwner, resolve, type IdMap, type WaveRecord } from "../src/lib/acq/sync";
+import { propertyProperties, pushOwner, resolve, type IdMap, type WaveRecord } from "../src/lib/acq/sync";
 import { loadEnv } from "./env";
 
 loadEnv();
@@ -18,6 +20,7 @@ const args = process.argv.slice(2);
 const file = args.find((a) => !a.startsWith("--"));
 const dry = args.includes("--dry-run");
 const force = args.includes("--force");
+const verify = args.includes("--verify");
 const limitIdx = args.indexOf("--limit");
 const limit = limitIdx >= 0 ? Number(args[limitIdx + 1]) : Infinity;
 if (!file || !existsSync(file)) {
@@ -47,7 +50,7 @@ async function main() {
   if (!token || !locationId) throw new Error("Set GHL_TOKEN and GHL_LOCATION_ID (site/.env.local).");
   const ghl = new Ghl({ token, locationId });
   const r = await resolve(ghl, { fresh: true });
-  const critical = r.missing.filter((m) => /pipeline|Dial Lane|Acq Owner ID|Residential Opportunity ID/.test(m));
+  const critical = r.missing.filter((m) => /pipeline|custom object|Acq Property ID|Dial Lane|Acq Owner ID|Residential Opportunity ID/.test(m));
   if (r.missing.length) console.log(`resolver: ${r.missing.length} unresolved (${r.missing.slice(0, 6).join("; ")})`);
   if (critical.length && !force) throw new Error(`critical schema pieces missing — run npm run ghl:provision first (${critical.join("; ")})`);
   if (!r.associationId) console.log("!! no contact<->property association yet: property records are created but not linked");
@@ -61,6 +64,17 @@ async function main() {
       const res = await pushOwner(ghl, r, rec, ids, { coldSmsDnd });
       ok++;
       appendFileSync(logPath, JSON.stringify({ at: new Date().toISOString(), owner_id: rec.owner_id, ok: true, ...res }) + "\n");
+      for (const w of res.warnings ?? []) console.log(`  ! ${rec.owner_id}: ${w}`);
+      if (verify && i < 3 && r.propertyKey) {
+        for (const p of rec.properties) {
+          const id = ids.properties[p.property_id];
+          if (!id) continue;
+          const sent = propertyProperties(p, r);
+          const back = (await ghl.getRecord(r.propertyKey, id)).record?.properties ?? {};
+          const dropped = Object.keys(sent).filter((k) => back[k] === undefined || back[k] === null || back[k] === "");
+          console.log(`  verify ${p.property_id}: ${Object.keys(sent).length} sent, ${dropped.length ? `NOT STORED: ${dropped.join(", ")}` : "all stored"}`);
+        }
+      }
     } catch (e) {
       failed++;
       appendFileSync(logPath, JSON.stringify({ at: new Date().toISOString(), owner_id: rec.owner_id, ok: false, error: String(e).slice(0, 500) }) + "\n");

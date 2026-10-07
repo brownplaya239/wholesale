@@ -15,7 +15,7 @@ import { auditCall, callWindowFlags, isFederalHoliday, trainedCallers } from "..
 import { verifyWavvSignature } from "../src/lib/acq/wavv.ts";
 import { formatIntel, planIntel, type CallIntel } from "../src/lib/acq/callIntel.ts";
 import { Ghl } from "../src/lib/acq/ghl.ts";
-import { cf, matchFields, pushOwner, resetResolveCache, resolve, type IdMap, type WaveRecord } from "../src/lib/acq/sync.ts";
+import { cf, matchFields, matchStages, pushOwner, resetResolveCache, resolve, toFieldValue, type IdMap, type WaveRecord } from "../src/lib/acq/sync.ts";
 import {
   CONTACT_FIELDS,
   DISPOSITIONS,
@@ -264,15 +264,35 @@ test("outbound leads are never told to text", () => {
 
 // ----------------------------------------------------------- mock GHL --
 type Json = Record<string, unknown>;
+const pf = (name: string, key: string, dataType = "TEXT", options?: { key: string; label: string }[]) => ({ name, fieldKey: `custom_objects.property.${key}`, dataType, ...(options ? { options } : {}) });
+const YES = [{ key: "yes", label: "Yes" }];
+/** Sum's live build: primary + 27 "Property Details" fields (GHL-made keys) + Acq Property ID. */
+const LIVE_PROPERTY_FIELDS = [
+  pf("Property Address", "property_address"),
+  pf("County", "county"), pf("Municipality", "municipality"), pf("ZIP", "zip"), pf("Block", "block"), pf("Lot", "lot"),
+  pf("APN/Parcel ID", "apnparcel_id"),
+  pf("Residential/Vacant Land", "residentialvacant_land", "SINGLE_OPTIONS", [{ key: "residential", label: "Residential" }, { key: "vacant_land", label: "Vacant Land" }]),
+  pf("Property Type", "property_type"),
+  pf("Occupancy", "occupancy", "SINGLE_OPTIONS", [{ key: "owner_occupied", label: "Owner Occupied" }, { key: "tenant", label: "Tenant" }, { key: "vacant", label: "Vacant" }]),
+  pf("Estimated Value", "estimated_value", "MONETORY"), pf("Mortgage Estimate", "mortgage_estimate", "MONETORY"),
+  pf("Equity %", "equity_", "NUMERICAL"), pf("Acres", "acres", "NUMERICAL"), pf("Ownership Years", "ownership_years", "NUMERICAL"),
+  pf("Wetlands %", "wetlands_", "NUMERICAL"), pf("Road Frontage", "road_frontage", "NUMERICAL"),
+  pf("Vacancy", "vacancy", "CHECKBOX", YES), pf("Absentee", "absentee", "CHECKBOX", YES), pf("Tax Delinquency", "tax_delinquency", "CHECKBOX", YES),
+  pf("Foreclosure", "foreclosure", "CHECKBOX", YES), pf("Inherited", "inherited", "CHECKBOX", YES), pf("Free & Clear", "free__clear", "CHECKBOX", YES),
+  pf("Flood", "flood", "CHECKBOX", YES),
+  pf("Source Provider", "source_provider"), pf("Original List", "original_list"), pf("Pull Date", "pull_date", "DATE"), pf("Skip-Trace Provider", "skiptrace_provider"),
+  pf("Acq Property ID", "acq_property_id"),
+];
 function mockGhl() {
   const calls: { method: string; path: string; body: Json | null }[] = [];
   const contacts = new Map<string, Json>();
+  const records = new Map<string, Json>();
   const opps = new Map<string, Json>();
   const field = (model: string) => (f: { name: string }) => ({ id: `${model[0]}_${fieldKey(f.name)}`, name: f.name, fieldKey: `${model}.${fieldKey(f.name)}`, model });
   const pipelines = (Object.keys(PIPELINES) as PipelineKey[]).map((k) => ({
     id: `pipe_${k}`,
     name: PIPELINES[k].name,
-    stages: PIPELINES[k].stages.map((s, i) => ({ id: `${k}_${i}`, name: s })),
+    stages: PIPELINES[k].stages.map((s, i) => ({ id: `${k}_${i}`, name: s.replace(/ \/ /g, "/") })),
   }));
   let n = 0;
   const mergeCf = (target: Json, cfs: { id: string; field_value: unknown }[] | undefined, valueKey: string) => {
@@ -320,9 +340,19 @@ function mockGhl() {
       }
       return ok({ contact: c });
     }
+    if (path === "/objects/") return ok({ objects: [{ key: "custom_objects.property", labels: { singular: "Property", plural: "Properties" } }] });
+    if (path === "/custom-fields/object-key/custom_objects.property") return ok({ fields: LIVE_PROPERTY_FIELDS, folders: [{ id: "fold1", name: "Property Details" }] });
     if (path.endsWith("/records/search")) return ok({ records: [] });
-    if (path.endsWith("/records") && method === "POST") return ok({ record: { id: `rec${++n}` } });
-    if (path.match(/\/records\/[^/]+$/)) return ok({ record: { id: path.split("/").pop() } });
+    if (path.endsWith("/records") && method === "POST") {
+      const id = `rec${++n}`;
+      records.set(id, (body!.properties ?? {}) as Json);
+      return ok({ record: { id } });
+    }
+    if (path.match(/\/records\/[^/]+$/)) {
+      const id = path.split("/").pop()!;
+      if (method === "PUT") records.set(id, (body!.properties ?? {}) as Json);
+      return ok({ record: { id, properties: records.get(id) ?? {} } });
+    }
     if (path === "/associations/relations") return ok({});
     if (path === "/opportunities/" && method === "POST") {
       const o: Json = { id: `op${++n}`, ...body, customFields: [] };
@@ -341,7 +371,7 @@ function mockGhl() {
     }
     return new Response(`unmocked ${method} ${path}`, { status: 404 });
   }) as typeof fetch;
-  return { calls, contacts, opps, fetchImpl };
+  return { calls, contacts, opps, records, fetchImpl };
 }
 
 const waveRecord = (): WaveRecord => ({
@@ -358,7 +388,42 @@ const waveRecord = (): WaveRecord => ({
     primary_county: "CAMDEN", asset_class: "residential", primary_property: "10 Oak St, Camden 08102", property_count: 1,
     lead_score: 61, signals: "Vacant · Tax delinquent", pull_date: "2026-09-25", skip_trace_provider: "batchskiptracing",
   },
-  properties: [{ property_id: "prop1", address: "10 Oak St", city: "Camden", zip: "08102", asset_class: "residential", vacant: true, est_value: 300000 }],
+  properties: [{
+    property_id: "prop1", address: "10 Oak St", city: "Camden", zip: "08102", county: "CAMDEN", apn: "1234",
+    asset_class: "residential", vacant: true, absentee: true, tax_delinquent: true, preforeclosure: false,
+    est_value: 300000, equity_pct: 65, flood_zone: "X", cohorts: "tax_delinquent;vacant_equity", providers: "batchleads",
+    pull_date: "2026-09-25", beds: 3, lead_score: 61,
+  }],
+});
+
+test("live build mapping: hand-typed stage names + Sum's 28 Property fields resolve; extras stay optional", async () => {
+  resetResolveCache();
+  const mock = mockGhl();
+  const ghl = new Ghl({ token: "t", locationId: "LOC", fetchImpl: mock.fetchImpl, minIntervalMs: 0 });
+  const r = await resolve(ghl, { fresh: true });
+  assert.deepEqual(r.missing, []);
+  assert.equal(r.propertyKey, "custom_objects.property");
+  assert.equal(r.pipelines.residential!.stages.get("New / Ready to Call"), "residential_0");
+  assert.equal(r.pipelines.land!.stageNames.get(`land_${PIPELINES.land.stages.length - 1}`), "Closed");
+  assert.equal(r.propertyFields.get("free_clear")!.key, "free__clear");
+  assert.equal(r.propertyFields.has("beds"), false);
+  const m = matchStages("residential", [{ id: "a", name: "New Ready To Call" }, { id: "b", name: "Closed" }]);
+  assert.equal(m.stages.get("New / Ready to Call"), "a");
+  assert.equal(m.stages.get("Closed Won"), "b", "alias: Closed == Closed Won");
+});
+
+test("value conversion follows the live field type, never guesses", () => {
+  const f = (dataType: string, options: { key?: string; label: string }[] = []) => ({ name: "x", key: "x", dataType, options });
+  assert.deepEqual(toFieldValue(f("CHECKBOX", [{ key: "yes", label: "Yes" }]), true), ["yes"]);
+  assert.equal(toFieldValue(f("CHECKBOX"), "Yes"), undefined);
+  assert.equal(toFieldValue(f("SINGLE_OPTIONS", [{ label: "Vacant Land" }]), ["Vacant Land", "Land"]), "Vacant Land");
+  assert.equal(toFieldValue(f("SINGLE_OPTIONS", [{ label: "Residential" }]), ["Commercial"]), undefined);
+  assert.equal(toFieldValue(f("NUMERICAL"), "$1,250"), 1250);
+  assert.equal(toFieldValue(f("NUMERICAL"), true), undefined);
+  assert.equal(toFieldValue(f("DATE"), "2026-09-25T00:00:00"), "2026-09-25");
+  assert.equal(toFieldValue(f("DATE"), "Sept"), undefined);
+  assert.equal(toFieldValue(f("TEXT"), 7), "7");
+  assert.equal(toFieldValue(f("TEXT"), ""), undefined);
 });
 
 test("GHL client: auth + Version headers, 429 retried, field ids resolved by key or name", async () => {
@@ -404,6 +469,18 @@ test("wave push: contact (no tags in upsert), property + association, opportunit
   assert.equal(o.pipelineStageId, "residential_0");
   assert.ok(mock.calls.some((c) => c.path === "/associations/relations" && c.body!.secondRecordId === res.contactId));
   assert.ok(ids.properties.prop1);
+  const props = mock.records.get(ids.properties.prop1)!;
+  assert.equal(props.property_address, "10 Oak St, Camden");
+  assert.equal(props.equity_, 65, "'Equity %' resolved to its live key");
+  assert.deepEqual(props.vacancy, ["yes"], "checkbox flag written as the option");
+  assert.equal(props.foreclosure, undefined, "false flag not written");
+  assert.equal(props.residentialvacant_land, "residential");
+  assert.equal(props.occupancy, "vacant");
+  assert.deepEqual(props.estimated_value, { currency: "default", value: 300000 });
+  assert.equal(props.flood, undefined, "zone X is not a flood flag");
+  assert.equal(props.original_list, "Tax delinquent; Vacant + equity");
+  assert.equal(props.acq_property_id, "prop1");
+  assert.ok(!("beds" in props) && !("lead_score" in props), "fields that don't exist in GHL are skipped, never invented");
   const before = mock.opps.size;
   await pushOwner(ghl, r, waveRecord(), ids, { coldSmsDnd: true });
   assert.equal(mock.opps.size, before, "re-push creates no second opportunity");

@@ -3,18 +3,24 @@
  * name, push a released owner (contact + property records + association +
  * opportunity), apply phone/lane patches, and push a web lead.
  */
-import { cfValue, Ghl, GhlError, type CustomFieldValue, type GhlContact, type GhlField } from "./ghl";
+import { cfValue, Ghl, GhlError, type CustomFieldValue, type GhlContact, type GhlField, type GhlObjectField } from "./ghl";
 import {
+  COHORT_LABELS,
   CONTACT_FIELDS,
   CONTACT_PROPERTY_ASSOCIATION,
   fieldKey,
   OPPORTUNITY_FIELDS,
   PIPELINES,
   PROPERTY_OBJECT,
+  STAGE_ALIASES,
   TAGS,
   type FieldDef,
   type PipelineKey,
+  type PropField,
 } from "./schema";
+
+/** A live Property-object field: the bare key records use, its type and options. */
+export type ObjField = { name: string; key: string; dataType: string; options: { key?: string; label: string }[] };
 
 export type Resolved = {
   contact: Map<string, string>;
@@ -22,10 +28,68 @@ export type Resolved = {
   idToName: Map<string, string>;
   pipelines: Partial<Record<PipelineKey, { id: string; stages: Map<string, string>; stageNames: Map<string, string> }>>;
   associationId: string | null;
+  /** live key of the Property custom object (null = not found) */
+  propertyKey: string | null;
+  /** PropField id -> live field */
+  propertyFields: Map<string, ObjField>;
   missing: string[];
 };
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/** Canonical stage name -> the live stage, ignoring spacing/punctuation, plus aliases. */
+export function matchStages(key: PipelineKey, live: { id: string; name: string }[]) {
+  const stages = new Map<string, string>();
+  const stageNames = new Map<string, string>();
+  const missing: string[] = [];
+  for (const s of PIPELINES[key].stages) {
+    const wants = [s, ...(STAGE_ALIASES[s] ?? [])].map(norm);
+    const hit = live.find((t) => norm(t.name) === wants[0]) ?? live.find((t) => wants.includes(norm(t.name)));
+    if (hit && !stageNames.has(hit.id)) {
+      stages.set(s, hit.id);
+      stageNames.set(hit.id, s);
+    } else missing.push(s);
+  }
+  return { stages, stageNames, missing };
+}
+
+const bare = (k: string) => k.split(".").pop() ?? k;
+
+function objOptions(f: GhlObjectField): ObjField["options"] {
+  return (f.options ?? []).map((o) => (typeof o === "string" ? { label: o } : { key: o.key, label: o.label ?? o.key ?? "" }));
+}
+
+/** PropField id -> live field, matched by label then aliases (never by our own key guess). */
+export function matchPropertyFields(live: GhlObjectField[], defs: readonly PropField[] = [{ ...PROPERTY_OBJECT.primary, type: "TEXT", tier: "core" }, ...PROPERTY_OBJECT.fields]) {
+  const map = new Map<string, ObjField>();
+  const missing: PropField[] = [];
+  for (const d of defs) {
+    const names = [d.name, ...(d.aliases ?? [])].map(norm);
+    const f =
+      live.find((x) => norm(x.name) === names[0]) ??
+      live.find((x) => names.includes(norm(x.name))) ??
+      live.find((x) => bare(x.fieldKey) === fieldKey(d.name));
+    if (f) map.set(d.id, { name: f.name, key: bare(f.fieldKey), dataType: (f.dataType ?? "TEXT").toUpperCase(), options: objOptions(f) });
+    else missing.push(d);
+  }
+  return { map, missing };
+}
+
+/** The Property object's live key: env override, else the object labelled "Property", else the default. */
+export async function findPropertyObject(ghl: Ghl): Promise<{ key: string | null; fields: GhlObjectField[]; folders: { id: string; name: string }[] }> {
+  const candidates = [process.env.GHL_PROPERTY_OBJECT_KEY].filter(Boolean) as string[];
+  if (!candidates.length) {
+    const objs = await ghl.listObjects().catch(() => []);
+    const hit = objs.find((o) => norm(o.labels?.singular ?? "") === norm(PROPERTY_OBJECT.singular) || norm(o.labels?.plural ?? "") === norm(PROPERTY_OBJECT.plural));
+    if (hit) candidates.push(hit.key);
+    candidates.push(PROPERTY_OBJECT.key, "custom_objects.properties");
+  }
+  for (const key of [...new Set(candidates)]) {
+    const r = await ghl.listObjectFields(key).catch(() => null);
+    if (r && (r.fields?.length || r.folders?.length)) return { key, fields: r.fields ?? [], folders: r.folders ?? [] };
+  }
+  return { key: null, fields: [], folders: [] };
+}
 
 export function matchFields(fields: GhlField[], defs: readonly FieldDef[], model: string): { map: Map<string, string>; missing: string[] } {
   const map = new Map<string, string>();
@@ -43,11 +107,12 @@ let cached: { at: number; r: Resolved } | null = null;
 /** Field ids, pipeline/stage ids and the contact↔property association id. Cached 10 min. */
 export async function resolve(ghl: Ghl, opts: { fresh?: boolean } = {}): Promise<Resolved> {
   if (!opts.fresh && cached && Date.now() - cached.at < 600_000) return cached.r;
-  const [cFields, oFields, pipes, assoc] = await Promise.all([
+  const [cFields, oFields, pipes, assoc, prop] = await Promise.all([
     ghl.listFields("contact"),
     ghl.listFields("opportunity"),
     ghl.listPipelines(),
     ghl.listAssociations().catch(() => ({ associations: [] })),
+    findPropertyObject(ghl),
   ]);
   const c = matchFields(cFields, CONTACT_FIELDS, "contact");
   const o = matchFields(oFields, OPPORTUNITY_FIELDS, "opportunity");
@@ -61,17 +126,30 @@ export async function resolve(ghl: Ghl, opts: { fresh?: boolean } = {}): Promise
       missing.push(`pipeline: ${PIPELINES[key].name}`);
       continue;
     }
-    const stages = new Map(p.stages.map((s) => [s.name, s.id] as const));
-    for (const s of PIPELINES[key].stages) if (!stages.has(s)) missing.push(`stage: ${PIPELINES[key].name} / ${s}`);
-    pipelines[key] = { id: p.id, stages, stageNames: new Map(p.stages.map((s) => [s.id, s.name] as const)) };
+    const m = matchStages(key, p.stages);
+    for (const s of m.missing) missing.push(`stage: ${PIPELINES[key].name} / ${s}`);
+    pipelines[key] = { id: p.id, stages: m.stages, stageNames: m.stageNames };
   }
+  const pk = prop.key;
+  const pf = matchPropertyFields(prop.fields);
+  if (!pk) missing.push(`custom object: ${PROPERTY_OBJECT.singular}`);
+  else for (const d of pf.missing) if (d.tier !== "extra") missing.push(`property field (${d.tier}): ${d.name}`);
   const a = (assoc.associations ?? []).find(
     (x) =>
       x.key === CONTACT_PROPERTY_ASSOCIATION.key ||
-      ([x.firstObjectKey, x.secondObjectKey].includes(PROPERTY_OBJECT.key) && [x.firstObjectKey, x.secondObjectKey].includes("contact"))
+      (pk !== null && [x.firstObjectKey, x.secondObjectKey].includes(pk) && [x.firstObjectKey, x.secondObjectKey].includes("contact"))
   );
-  if (!a) missing.push(`association: contact <-> ${PROPERTY_OBJECT.key}`);
-  const r: Resolved = { contact: c.map, opportunity: o.map, idToName, pipelines, associationId: a?.id ?? null, missing };
+  if (!a) missing.push(`association: contact <-> ${pk ?? PROPERTY_OBJECT.key}`);
+  const r: Resolved = {
+    contact: c.map,
+    opportunity: o.map,
+    idToName,
+    pipelines,
+    associationId: a?.id ?? null,
+    propertyKey: pk,
+    propertyFields: pk ? pf.map : new Map(),
+    missing,
+  };
   cached = { at: Date.now(), r };
   return r;
 }
@@ -194,74 +272,152 @@ function dialState(rec: WaveRecord): Record<string, unknown> {
   };
 }
 
-const ynu = (v: unknown) => (v === true ? "Yes" : v === false ? "No" : "Unknown");
+/** What the pipeline knows about a property, keyed by PropField id. */
+export function propertyValues(p: WaveProperty): Record<string, unknown> {
+  const cohorts = String(p.cohorts ?? "").split(";").filter(Boolean);
+  const floodZone = String(p.flood_zone ?? "").trim().toUpperCase();
+  const flood =
+    floodZone || p.flood_pct != null
+      ? /^(A|V)/.test(floodZone) || Number(p.flood_pct ?? 0) > 0
+      : null;
+  const occupancy = p.vacant === true
+    ? ["Vacant"]
+    : p.owner_occupied === true
+      ? ["Owner-occupied", "Owner Occupied", "Owner"]
+      : p.absentee === true
+        ? ["Tenant-occupied", "Tenant Occupied", "Tenant", "Non-owner", "Rented", "Absentee"]
+        : ["Unknown"];
+  return {
+    address: [p.address, p.city].filter(Boolean).join(", "),
+    acq_property_id: p.property_id,
+    county: p.county,
+    // the vendor's postal city stands in when no municipality is supplied
+    municipality: p.municipality || p.city,
+    zip: p.zip,
+    block: p.block,
+    lot: p.lot,
+    apn: p.apn,
+    asset_class: p.asset_class === "land" ? ["Vacant Land", "Land", "Vacant"] : ["Residential", "Home"],
+    property_type: p.property_type,
+    occupancy,
+    est_value: p.est_value,
+    mortgage_estimate: p.mortgage_estimate,
+    equity_pct: p.equity_pct,
+    acres: p.acres,
+    ownership_years: p.ownership_years,
+    wetlands_pct: p.wetlands_pct,
+    road_frontage_ft: p.road_frontage_ft,
+    vacant: p.vacant,
+    absentee: p.absentee,
+    tax_delinquent: p.tax_delinquent,
+    preforeclosure: p.preforeclosure,
+    inherited: p.inherited,
+    free_clear: p.free_clear,
+    flood,
+    source_provider: p.providers,
+    original_list: cohorts.map((c) => COHORT_LABELS[c] ?? c).join("; ") || undefined,
+    pull_date: p.pull_date,
+    skip_trace_provider: p.skip_trace_provider,
+    lead_score: p.lead_score,
+    signals: p.signals,
+    last_sale_date: p.last_sale_date,
+    last_sale_price: p.last_sale_price,
+    beds: p.beds,
+    baths: p.baths,
+    sqft: p.sqft,
+    year_built: p.year_built,
+    units: p.units,
+    mls_status: p.mls_status,
+    landlocked: p.landlocked,
+    slope_pct: p.slope_pct,
+    flood_zone: p.flood_zone,
+  };
+}
 
-export function propertyProperties(p: WaveProperty): Record<string, unknown> {
-  const out: Record<string, unknown> = {
-    [PROPERTY_OBJECT.primary.key]: [p.address, p.city].filter(Boolean).join(", "),
+/** Converts a value to the live field's type. undefined = skip (never guess). */
+export function toFieldValue(f: ObjField, v: unknown): unknown {
+  if (v === null || v === undefined || v === "" || (typeof v === "number" && !Number.isFinite(v))) return undefined;
+  const pick = (cands: string[]) => {
+    for (const c of cands) {
+      const o = f.options.find((x) => norm(x.label) === norm(c) || (x.key && norm(x.key) === norm(c)));
+      if (o) return o.key ?? o.label;
+    }
+    return undefined;
   };
-  const src: Record<string, unknown> = {
-    "Acq Property ID": p.property_id,
-    City: p.city,
-    ZIP: p.zip,
-    County: p.county,
-    Municipality: p.municipality,
-    APN: p.apn,
-    Block: p.block,
-    Lot: p.lot,
-    "Asset Class": p.asset_class,
-    "Property Type": p.property_type,
-    Units: p.units,
-    Beds: p.beds,
-    Baths: p.baths,
-    Sqft: p.sqft,
-    Acres: p.acres,
-    "Year Built": p.year_built,
-    "Estimated Value": p.est_value,
-    "Mortgage Estimate": p.mortgage_estimate,
-    "Equity Pct": p.equity_pct,
-    "Ownership Years": p.ownership_years,
-    "Last Sale Date": p.last_sale_date,
-    "Last Sale Price": p.last_sale_price,
-    Vacant: ynu(p.vacant),
-    Absentee: ynu(p.absentee),
-    "Tax Delinquent": ynu(p.tax_delinquent),
-    Preforeclosure: ynu(p.preforeclosure),
-    Inherited: ynu(p.inherited),
-    "Free And Clear": ynu(p.free_clear),
-    "Code Violation": ynu(p.code_violation),
-    "Wetlands Pct": p.wetlands_pct,
-    "Flood Zone": p.flood_zone,
-    "Flood Pct": p.flood_pct,
-    "Road Frontage Ft": p.road_frontage_ft,
-    Landlocked: ynu(p.landlocked),
-    "Slope Pct": p.slope_pct,
-    "MLS Status": p.mls_status,
-    "Source Lists": p.cohorts,
-    "Source Provider": p.providers,
-    "Pull Date": p.pull_date,
-    "Skip Trace Provider": p.skip_trace_provider,
-    "Lead Score": p.lead_score,
-    "Score Reasons": p.score_reasons,
-    Signals: p.signals,
-    "Property Status": "Active",
+  const num = () => {
+    const n = typeof v === "number" ? v : Number(String(v).replace(/[$,%\s]/g, ""));
+    return typeof v === "boolean" || !Number.isFinite(n) ? undefined : n;
   };
-  for (const [name, v] of Object.entries(src)) {
-    if (v === null || v === undefined || v === "") continue;
-    out[fieldKey(name)] = v;
+  switch (f.dataType) {
+    case "CHECKBOX": {
+      if (typeof v !== "boolean") return undefined;
+      if (!v) return undefined;
+      const o = f.options[0];
+      return [o ? (o.key ?? o.label) : "Yes"];
+    }
+    case "SINGLE_OPTIONS":
+    case "RADIO": {
+      const cands = Array.isArray(v) ? v.map(String) : typeof v === "boolean" ? [v ? "Yes" : "No"] : [String(v)];
+      return pick(cands);
+    }
+    case "MULTIPLE_OPTIONS": {
+      const cands = Array.isArray(v) ? v.map(String) : [String(v)];
+      const hit = pick(cands);
+      return hit === undefined ? undefined : [hit];
+    }
+    case "NUMERICAL":
+      return num();
+    case "MONETORY": {
+      const n = num();
+      return n === undefined ? undefined : { currency: "default", value: n };
+    }
+    case "DATE":
+      return /^\d{4}-\d{2}-\d{2}/.test(String(v)) ? String(v).slice(0, 10) : undefined;
+    default:
+      if (typeof v === "boolean") return v ? "Yes" : "No";
+      return Array.isArray(v) ? String(v[0]) : String(v);
+  }
+}
+
+/** Record `properties` for the live Property object: only fields that exist, in their types. */
+export function propertyProperties(p: WaveProperty, r: Pick<Resolved, "propertyFields">): Record<string, unknown> {
+  const vals = propertyValues(p);
+  const out: Record<string, unknown> = {};
+  for (const [id, v] of Object.entries(vals)) {
+    const f = r.propertyFields.get(id);
+    if (!f) continue;
+    const conv = toFieldValue(f, v);
+    if (conv !== undefined) out[f.key] = conv;
   }
   return out;
 }
 
-async function upsertProperty(ghl: Ghl, r: Resolved, p: WaveProperty, contactId: string, ids: IdMap): Promise<string> {
-  const props = propertyProperties(p);
+const TEXTY = new Set(["TEXT", "LARGE_TEXT"]);
+
+async function upsertProperty(ghl: Ghl, r: Resolved, p: WaveProperty, contactId: string, ids: IdMap, warnings: string[] = []): Promise<string | null> {
+  const key = r.propertyKey;
+  if (!key) return null;
+  const props = propertyProperties(p, r);
   let id = ids.properties[p.property_id];
-  if (!id) {
-    const found = await ghl.searchRecords(PROPERTY_OBJECT.key, `acq_property_id:${p.property_id}`).catch(() => ({ records: [] }));
+  const idField = r.propertyFields.get("acq_property_id");
+  if (!id && idField) {
+    const found = await ghl.searchRecords(key, `${idField.key}:${p.property_id}`).catch(() => ({ records: [] }));
     id = found.records?.[0]?.id ?? "";
   }
-  if (id) await ghl.updateRecord(PROPERTY_OBJECT.key, id, props);
-  else id = (await ghl.createRecord(PROPERTY_OBJECT.key, props)).record.id;
+  const write = async (body: Record<string, unknown>) =>
+    id ? (await ghl.updateRecord(key, id, body), id) : (await ghl.createRecord(key, body)).record.id;
+  try {
+    id = await write(props);
+  } catch (e) {
+    if (!(e instanceof GhlError) || e.status >= 500) throw e;
+    // A value GHL rejects (option label, money shape…) must not lose the record:
+    // retry with text fields only and report what was dropped.
+    const textOnly = Object.fromEntries(
+      [...r.propertyFields.values()].filter((f) => TEXTY.has(f.dataType) && f.key in props).map((f) => [f.key, props[f.key]])
+    );
+    id = await write(textOnly);
+    warnings.push(`property ${p.property_id}: GHL rejected typed fields (${e.body.slice(0, 120)}); saved text fields only`);
+  }
   ids.properties[p.property_id] = id;
   if (r.associationId) {
     await ghl.relate(r.associationId, id, contactId).catch((e) => {
@@ -310,7 +466,7 @@ export async function ensureOpportunity(
   return { id: res.opportunity.id, created: true };
 }
 
-export type PushResult = { contactId: string; newContact: boolean; properties: number; opportunitiesCreated: number; note?: string };
+export type PushResult = { contactId: string; newContact: boolean; properties: number; opportunitiesCreated: number; note?: string; warnings?: string[] };
 
 /**
  * Release one owner into GHL. Idempotent: re-pushing the same wave updates in
@@ -355,7 +511,9 @@ export async function pushOwner(ghl: Ghl, r: Resolved, rec: WaveRecord, ids: IdM
   if (!keepDialState) tags.push(`lane:${c.dial_lane}`, TAGS.noSms);
   await ghl.addTags(contactId, tags);
 
-  for (const p of rec.properties) await upsertProperty(ghl, r, p, contactId, ids);
+  const warnings: string[] = [];
+  if (!r.propertyKey) warnings.push("no Property custom object found — property records skipped");
+  for (const p of rec.properties) await upsertProperty(ghl, r, p, contactId, ids, warnings);
 
   const opps: Partial<Record<PipelineKey, string>> = { ...(known?.opportunities ?? {}) };
   let created = 0;
@@ -381,6 +539,7 @@ export async function pushOwner(ghl: Ghl, r: Resolved, rec: WaveRecord, ids: IdM
     properties: rec.properties.length,
     opportunitiesCreated: created,
     note: keepDialState ? "existing consented contact — dial state preserved" : undefined,
+    ...(warnings.length ? { warnings } : {}),
   };
 }
 
