@@ -91,7 +91,7 @@ test(`no answer #${MAX_ATTEMPTS}: recycle 90 days, card abandoned`, () => {
   assert.equal(p.contactFields["Dial Lane"], "recycle");
   assert.equal(p.contactFields["Next Call Due"], null);
   assert.equal(p.opp?.status, "abandoned");
-  assert.equal(p.opp?.fields["Lost Reason"], "Unreachable (recycled)");
+  assert.equal(p.opp?.fields["Close Reason"], "Unreachable (recycled)");
 });
 
 test("wrong number: number invalidated, next number queued now; last number -> needs re-skip", () => {
@@ -111,7 +111,7 @@ test("DNC overrides everything: person + every number suppressed, DND all channe
   assert.deepEqual(p.suppress.filter((s) => s.kind === "phone").map((s) => s.value).sort(), ["8562221111", "8563334444"]);
   assert.ok(p.suppress.some((s) => s.kind === "contact"));
   assert.equal(p.opp?.status, "lost");
-  assert.equal(p.opp?.fields["Lost Reason"], "DNC / opt-out");
+  assert.equal(p.opp?.fields["Close Reason"], "DNC / opt-out");
 });
 
 test("hot with missing qualification fields: stays Contacted, caller task, Sum still alerted", () => {
@@ -158,7 +158,7 @@ test("not interested with a caller-set future follow-up = nurture, not lost", ()
 test("already listed: property suppressed (NJ REC), card lost, single-property owner suppressed", () => {
   const p = planDisposition("LISTED", call(), contact(), opp("Contacted"));
   assert.deepEqual(p.suppress, [{ kind: "property", value: "prop1", reason: "listed with another broker (NJ REC)" }]);
-  assert.equal(p.opp?.fields["Lost Reason"], "Listed with another broker");
+  assert.equal(p.opp?.fields["Close Reason"], "Listed with another broker");
   assert.equal(p.contactFields["Dial Lane"], "suppressed");
   const multi = planDisposition("LISTED", call(), contact({ propertyCount: 3 }), opp("Contacted"));
   assert.equal(multi.contactFields["Dial Lane"], undefined);

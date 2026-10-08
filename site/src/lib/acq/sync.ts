@@ -572,7 +572,7 @@ async function applyPatch(ghl: Ghl, r: Resolved, rec: WaveRecord, ids: IdMap): P
       if (!oppId) continue;
       await ghl.updateOpportunity(oppId, {
         status: "abandoned",
-        customFields: cf(r.opportunity, { "Lost Reason": "No callable phone" }),
+        customFields: cf(r.opportunity, { "Close Reason": "No callable phone" }),
       });
     }
   }

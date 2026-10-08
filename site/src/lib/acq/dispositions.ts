@@ -182,7 +182,7 @@ export function planDisposition(key: DispositionKey, call: CallFacts, c: Contact
     if (!opp || !plan.opp) return;
     if (canAuto) {
       plan.opp.status = status;
-      plan.opp.fields["Lost Reason"] = reason;
+      plan.opp.fields["Close Reason"] = reason;
     } else {
       plan.tasks.push({
         title: `Review: "${label}" on a deal past consultation`,

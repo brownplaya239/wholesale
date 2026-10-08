@@ -152,7 +152,7 @@ export const OPPORTUNITY_FIELDS: readonly FieldDef[] = [
     type: "SINGLE_OPTIONS",
     options: ["None", "Verbal yes", "PSA sent", "PSA signed", "Listing agreement signed", "Assigned", "Closed", "Cancelled"],
   },
-  { name: "Lost Reason", type: "SINGLE_OPTIONS", options: LOST_REASONS },
+  { name: "Close Reason", type: "SINGLE_OPTIONS", options: LOST_REASONS },
   { name: "Primary Property ID", type: "TEXT" },
   { name: "Property Address", type: "TEXT" },
   { name: "Caller Attribution", type: "TEXT" },
