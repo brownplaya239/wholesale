@@ -48,10 +48,12 @@ Automation → Workflows. Leave every GHL template workflow in **Draft**.
 1. Trigger: **Contact Tag** → Tag Added → `hot`. Add a second trigger: Contact
    Tag → Tag Added → `booked`.
 2. Actions, in order:
-   - **Internal Notification** → SMS → to Sum (user) / Sum's own cell.
+   - **Internal Notification** → In-App/Push (GHL mobile app) → to Sum.
      Body: `HOT: {{contact.name}} {{contact.phone}} — {{contact.primary_property}} — {{contact.signals}}`
-   - **Internal Notification** → In-App/Push → same text.
+     (pick fields with the `{}` merge-tag picker; don't type keys).
    - **Assign to User** → Sum (leave "only unassigned" off).
+   - Internal SMS to Sum's cell: optional, only once A2P 10DLC is approved.
+     The rich alert goes to **Slack from the middleware** (see 3, `SLACK_WEBHOOK_URL`).
 3. Settings (gear): **Allow re-entry ON** (a lead can go hot twice).
 4. Toggle **Publish** → Save.
 
@@ -61,7 +63,8 @@ Automation → Workflows. Leave every GHL template workflow in **Draft**.
    `dnc` → End. Only web-form leads with stored consent continue.
 3. On the continue branch:
    - **Send SMS**: `Hi {{contact.first_name}}, it's Sumeet with House Sold NJ — got your info. Calling you in a few minutes. Reply STOP to opt out.`
-   - **Internal Notification** → SMS + push to Sum: `NEW WEB LEAD {{contact.name}} {{contact.phone}}`
+   - **Internal Notification** → push to Sum: `NEW WEB LEAD {{contact.name}} {{contact.phone}}`
+     (the site also posts every web lead to Slack)
    - **Add Task** → "Call within 5 min", due now, assigned to Sum.
 4. **SMS needs an approved A2P 10DLC registration** on the sending number
    (Settings → Phone Numbers → Trust Center). If it is not approved, delete the
@@ -191,6 +194,7 @@ not touch live GHL) → **Sensitive** ON → Save.
 | `ANTHROPIC_API_KEY` | console.anthropic.com → API Keys → Create. Set a monthly spend limit (Billing → Limits) |
 | `WAVV_API_KEY` | from 2.5 |
 | `WAVV_WEBHOOK_SECRET` | from 2.7 (added after the merge, then redeploy) |
+| `SLACK_WEBHOOK_URL` | Slack incoming webhook for #acq-alerts: api.slack.com/apps → Create New App → From scratch → Incoming Webhooks ON → Add New Webhook → pick channel → copy URL. Carries hot/booked/warm alerts, compliance violations, AI call-review alerts and new web leads |
 | `ACQ_TRAINED_CALLERS` | Monday, after sign-offs (6.4) |
 
 ---
