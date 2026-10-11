@@ -26,6 +26,21 @@ merge is that deploy.
 2. Turn on **Allow Multiple Opportunities per Contact** → Save.
    Needed because one owner can hold a residential AND a land deal.
 
+Status 2026-10-11: 1.1 and 1.2 verified live via API (Property searchable
+fields = Property Address + Acq Property ID; `allowDuplicateOpportunity: true`).
+
+### 1.2b Require qualification fields per stage (Labs)
+1. Settings → **Labs** → enable **Show & Require Opportunity Fields Conditionally**.
+2. Settings → Objects → Opportunities (or the pipeline's stage settings) → rules:
+   - Residential **Qualified Warm**, **Qualified Hot** and Land **Qualified** require:
+     Owner Confirmed, Motivation, Property Condition, Seller Timeline,
+     Asking Price, Occupancy, Decision Makers, Next Action, Next Follow Up.
+   - Residential + Land **Under Contract** require: **Deal Path**,
+     **Path Disclosed In Writing**.
+3. This only binds people dragging cards in the UI. The middleware's API stage
+   moves are not blocked (by design — a Hot disposition with blanks still moves
+   the card, and the system tags it `qa:missing-fields` for the caller to fix).
+
 ### 1.3 Workflows: publish our 2, leave the other 6 in draft
 Automation → Workflows. Leave every GHL template workflow in **Draft**.
 
