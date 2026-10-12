@@ -315,7 +315,7 @@ function mockGhl() {
       return ok({ customFields: (model === "contact" ? CONTACT_FIELDS : OPPORTUNITY_FIELDS).map(field(model)) });
     }
     if (path === "/opportunities/pipelines") return ok({ pipelines });
-    if (path === "/associations/") return ok({ associations: [{ id: "assoc1", key: "owner_property", firstObjectKey: "custom_objects.property", secondObjectKey: "contact" }] });
+    if (path === "/associations/") return ok({ associations: [{ id: "assoc1", key: "owner_property", firstObjectKey: "contact", secondObjectKey: "custom_objects.property" }] });
     if (path === "/contacts/upsert") {
       const existing = [...contacts.values()].find((c) => c.phone === body!.phone);
       if (existing) return ok({ contact: existing, new: false });
@@ -467,8 +467,12 @@ test("wave push: contact (no tags in upsert), property + association, opportunit
   assert.equal(cfv["c_residential_opportunity_id"], ids.owners.own1.opportunities.residential);
   const o = mock.opps.get(ids.owners.own1.opportunities.residential!)!;
   assert.equal(o.pipelineStageId, "residential_0");
-  assert.ok(mock.calls.some((c) => c.path === "/associations/relations" && c.body!.secondRecordId === res.contactId));
   assert.ok(ids.properties.prop1);
+  // Live GHL defines owner_property as contact -> property and 422s the reverse order.
+  assert.ok(
+    mock.calls.some((c) => c.path === "/associations/relations" && c.body!.firstRecordId === res.contactId && c.body!.secondRecordId === ids.properties.prop1),
+    "relation sent in the association's own object order",
+  );
   const props = mock.records.get(ids.properties.prop1)!;
   assert.equal(props.property_address, "10 Oak St, Camden");
   assert.equal(props.equity_, 65, "'Equity %' resolved to its live key");
