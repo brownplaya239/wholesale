@@ -34,20 +34,13 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from nj_common import (  # noqa: E402
-    COMPLIANCE, PROCESSED, is_suppressed, load_listing_suppression,
+    COMPLIANCE, COMPLIANCE_TEMPLATES, PROCESSED, is_suppressed, load_listing_suppression,
 )
 
 SURVIVOR_STATUSES = {"SAME_OWNER", "OWNER_CHANGED_NO_SALE",
                      "NO_SALE_OWNER_UNVERIFIED", "UNRESOLVED"}
 # UNRESOLVED stays mailable: worst case the letter returns, which is data.
 # SOLD_ARMS_LENGTH / non-family SOLD_NON_USABLE are suppressed as seller leads.
-
-COMPLIANCE_TEMPLATES = {
-    "dial_log.csv": "ts,ref_id,number,disposition,scrub_batch_date,agent\n",
-    "scrub_log.csv": "date,source,n_records,n_suppressed,file_hash\n",
-    "mail_returns.csv": "date,ref_id,usps_reason_code\n",
-    "optouts.csv": "date,ref_id,channel,request_verbatim\n",
-}
 
 
 def recipient_name(row) -> str:

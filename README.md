@@ -15,6 +15,12 @@ Quick start:
     python scripts/04_skiptrace_export.py         # survivors-only vendor upload CSV
     python scripts/05_mail_segments.py            # mail S1-S4 + compliance templates
 
+Acquisition machine (BatchLeads / Land Portal -> GHL + WAVV -> AI review), see
+docs/ACQUISITION_SYSTEM.md:
+    python scripts/09_acq_ingest.py inspect|add|build
+    python scripts/10_acq_release.py plan|wave|scrub-export|scrub-apply|patch|mail-export
+    cd site && npm run ghl:provision && npm run ghl:push -- ../data/processed/acq/waves/W01.jsonl
+
 If the Treasury downloads 404 (links move), fetch the SR1A zips and the five
 county MOD-IV zips by hand from
 https://www.nj.gov/treasury/taxation/lpt/statdata.shtml, unzip, then:

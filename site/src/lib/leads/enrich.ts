@@ -25,6 +25,7 @@ export function leadFacts(l: LeadRecord): LeadFacts {
     notes: l.notes,
     beds: l.beds,
     baths: l.baths,
+    canText: l.consent?.checked === true,
   };
 }
 

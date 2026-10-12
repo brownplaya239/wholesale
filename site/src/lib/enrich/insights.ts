@@ -21,6 +21,8 @@ export type LeadFacts = {
   /** Seller-reported on the thank-you page, e.g. "3", "2.5", "5+". */
   beds?: string | null;
   baths?: string | null;
+  /** False for outbound-call leads and anyone without a stored consent artifact. */
+  canText?: boolean;
 };
 
 const CURRENTLY_LISTED = new Set(["Active", "Active Under Contract", "Pending", "Coming Soon", "Hold"]);
@@ -47,8 +49,13 @@ export function njHour(at: Date): number {
   return Number(new Intl.DateTimeFormat("en-US", { hour: "numeric", hourCycle: "h23", timeZone: "America/New_York" }).format(at));
 }
 
-export function firstTouch(at: Date): string {
+export function firstTouch(at: Date, canText = true): string {
   const h = njHour(at);
+  if (!canText) {
+    return h >= 9 && h < 20
+      ? "Call today — no text consent on file, never text this owner"
+      : "Call after 9:00 AM their time — no text consent on file, never text this owner";
+  }
   return h >= 8 && h < 21
     ? "Call within 5 minutes; if no answer, text right away"
     : "Arrived outside 8 AM–9 PM — text at 8:00 AM ET, call by 9:00 AM ET";
@@ -300,7 +307,7 @@ export function assignWorkflow(d: Dossier | null, lead: LeadFacts, now = new Dat
   return {
     track,
     label: TRACK_LABEL[track],
-    firstTouch: firstTouch(new Date(lead.createdAt)),
+    firstTouch: firstTouch(new Date(lead.createdAt), lead.canText ?? true),
     steps: [...steps, ...ins.recommended],
     tags: ins.tags,
     updatedAt: now.toISOString(),

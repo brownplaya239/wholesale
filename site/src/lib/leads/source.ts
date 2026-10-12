@@ -1,7 +1,7 @@
 /** Lead source / attribution parsed from the landing URL and referrer. */
 
 export type LeadSource = {
-  channel: "google_ads" | "utm" | "referral" | "direct";
+  channel: "google_ads" | "utm" | "referral" | "direct" | "outbound";
   landingPath: string | null;
   referrer: string | null;
   utm: Partial<Record<"source" | "medium" | "campaign" | "term" | "content", string>>;
@@ -57,5 +57,6 @@ export function describeSource(s: LeadSource): string {
   }
   if (s.channel === "utm") return `UTM: ${[s.utm.source, s.utm.medium, s.utm.campaign].filter(Boolean).join(" / ")}`;
   if (s.channel === "referral") return `Referral from ${s.referrer}`;
+  if (s.channel === "outbound") return `Outbound call${s.utm.campaign ? ` (${s.utm.campaign})` : ""}`;
   return "Direct / organic";
 }
