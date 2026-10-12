@@ -41,6 +41,12 @@ fields = Property Address + Acq Property ID; `allowDuplicateOpportunity: true`).
    moves are not blocked (by design — a Hot disposition with blanks still moves
    the card, and the system tags it `qa:missing-fields` for the caller to fix).
 
+Status 2026-10-12: done in the UI. Labs toggle was already on. Opportunity
+conditional rule 1: Residential Qualified Warm/Qualified Hot OR Land Qualified
+-> all nine fields mandatory. Rule 2: Residential Under Contract OR Land
+"Under Contract / Option" -> Deal Path + Path Disclosed In Writing mandatory.
+The pre-existing "Status Lost -> Lost reason" rule was left alone.
+
 ### 1.3 Workflows: publish our 2, leave the other 6 in draft
 Automation → Workflows. Leave every GHL template workflow in **Draft**.
 
@@ -72,6 +78,22 @@ Automation → Workflows. Leave every GHL template workflow in **Draft**.
 5. Publish → Save.
 
 Test both: add tag `hot` to a test contact of your own → you get the SMS/push.
+
+Status 2026-10-12: both built and left in **Draft** (not published).
+- A is the renamed "Hot/Booked Lead Alert": triggers Tag added `booked` / `hot`;
+  push to Sumeet V Sancheti (particular user) with name, phone, Primary
+  Property, Signals; Assign to Sumeet (only-unassigned off); re-entry ON.
+- B was rebuilt as a new workflow. The old broken draft is renamed
+  "OLD · Inbound speed-to-lead (broken draft, superseded)" and still in Draft;
+  delete it when convenient. New flow: Tag added `acq:inbound` -> STOP if tag
+  `no-sms` OR tag `dnc` OR "DND enabled channels" is not empty -> call window
+  (09:00 <= hour < 20:00, day != Sunday, account TZ America/New_York).
+  In window: checklist SMS + push + task "Call within 5 min" (Sumeet, due 0 days).
+  After hours: SMS "...We're closed right now; I'll call you when we open
+  (9am-8pm, Mon-Sat). Reply STOP to opt out." + push + task "Call at 9am open"
+  (Sumeet, due 0 days).
+- Before publishing B: the sub-account has **no phone number** and A2P 10DLC is
+  not started (Trust Center), so the SMS steps cannot send yet.
 
 ### 1.4 Smart lists (Contacts → Smart Lists → + Add filter → Save as smart list)
 Every dial queue also has: **DND = off for calls** and **Tags does not include `dnc`**.
@@ -105,6 +127,19 @@ every morning.
 | Stale warm | Tag `warm`; Last Successful Contact more than 7 days ago |
 | Caller QA | Tag `qa:review`, `qa:missing-fields` or `compliance:violation` |
 
+Status 2026-10-12: done. Relative dates work, so no cron `due` tag is needed:
+"Next Call Due before tomorrow OR empty" is three OR groups (Is empty / Is
+Today / More than 1 minute ago), each repeating the lane, DND-calls off,
+DND-all off and not-`dnc` conditions. Q2 = `9a-8p ET` exact text; Q3 = Is not
+`9a-8p ET`; Q5 = (power OR manual) via six groups. Q1-Q5 sort Lead Score desc.
+Contact lists: Q1-Q5, "🔥 Hot — act now" (Residential Qualified Hot OR tag
+`alert:hidden-hot`), Caller QA, Stale warm. Opportunity lists (all pipelines):
+Appointments, Offers to make, Offers outstanding, Offers out follow-up due,
+Under contract, Contracts pending, "Today - follow-ups due" (tasks due today is
+GHL's built-in Tasks -> Due Today). Tags pre-created so filters could select
+them: `warm`, `qa:review`, `qa:missing-fields`, `compliance:violation`,
+`alert:hidden-hot`.
+
 ### 1.5 Caller users
 1. Settings → My Staff (Team) → **Add Employee**: name, email, role **User**.
 2. Permissions: Contacts, Conversations, Opportunities, Tasks, Calendars ON.
@@ -114,6 +149,9 @@ every morning.
 4. Repeat per caller. After Monday sign-off, their **WAVV** user id goes into
    `ACQ_TRAINED_CALLERS` (step 6.4), not the GHL id.
 
+Status 2026-10-12: not done. Only Sumeet exists; caller names/emails needed
+and Sum creates the accounts.
+
 ### 1.6 Delete the two empty default pipelines
 Both have 0 opportunities (checked 2026-10-11).
 Opportunities → Pipelines → **Marketing Pipeline** → ⋯ / edit → Delete. Same for
@@ -122,6 +160,9 @@ Land Acquisition untouched (names and stage names are matched by the code).
 Do not build COLD CALL NEW LEAD FLOW or CALLBACKS.
 
 ---
+
+Status 2026-10-12: only Residential Acquisition and Vacant Land Acquisition
+exist; the two default pipelines are already gone.
 
 ## 2. WAVV
 
@@ -153,6 +194,18 @@ Tags (optional in WAVV; the middleware adds them anyway): `wavv-no-answer`,
 `wavv-callback`, `wavv-warm`, `wavv-hot`, `wavv-booked`, `wavv-listed`,
 `wavv-sold`, `wavv-wrong-owner`. No GHL stage or workflow action on any of them.
 
+Status 2026-10-12: done in Agency -> WAVV Admin (Template step skipped, so no
+call boards and no stage automations). Renamed: Interested -> Warm Lead,
+Appointment Set -> Appointment Booked, Callback -> Callback Requested, Do Not
+Contact -> DNC, system "Voice Message" -> Voicemail, system "Bad Number"
+(disconnected) -> Wrong Number. Added Hot Lead, Already Listed, Property Sold,
+Wrong Owner. Tags as above. Outcome: Positive (skip remaining numbers) = Warm,
+Hot, Booked, Callback; Negative = Not Interested, DNC, Already Listed, Property
+Sold; Neutral (keep dialing other numbers) = No Answer, Voicemail, Wrong
+Number, Wrong Owner. WAVV system entries left: "None" (locked fallback when no
+disposition is chosen) plus hidden Agent Canceled, System Callback, Call
+Blocked. Nothing deleted.
+
 ### 2.4 Dialer settings
 - Record Calls **ON**; Call Transcription **ON**.
 - Voicemail drop: **no recording uploaded** (and none on any user profile).
@@ -164,6 +217,11 @@ Tags (optional in WAVV; the middleware adds them anyway): `wavv-no-answer`,
   "House Sold NJ" or the brokerage name where the carrier allows. Callback to
   any of these numbers must reach a person or a voicemail box that names the
   business.
+
+Status 2026-10-12: **blocked on a paid plan.** The sub-account WAVV wizard
+requires Plan -> "Start Trial" before Settings (Single Line $69.30/seat/mo
+annual or $99 monthly; Multi Line $104.30 / $149). Wizard paused, nothing
+purchased. Single Line matches "lines = 1".
 
 ### 2.5 API key
 WAVV → Integrations → API keys → Create → copy once into Vercel as
