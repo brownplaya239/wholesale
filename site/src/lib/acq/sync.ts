@@ -28,6 +28,8 @@ export type Resolved = {
   idToName: Map<string, string>;
   pipelines: Partial<Record<PipelineKey, { id: string; stages: Map<string, string>; stageNames: Map<string, string> }>>;
   associationId: string | null;
+  /** GHL requires firstRecordId/secondRecordId in the association's own object order. */
+  associationContactFirst: boolean;
   /** live key of the Property custom object (null = not found) */
   propertyKey: string | null;
   /** PropField id -> live field */
@@ -146,6 +148,7 @@ export async function resolve(ghl: Ghl, opts: { fresh?: boolean } = {}): Promise
     idToName,
     pipelines,
     associationId: a?.id ?? null,
+    associationContactFirst: a ? a.firstObjectKey === "contact" : true,
     propertyKey: pk,
     propertyFields: pk ? pf.map : new Map(),
     missing,
@@ -420,7 +423,8 @@ async function upsertProperty(ghl: Ghl, r: Resolved, p: WaveProperty, contactId:
   }
   ids.properties[p.property_id] = id;
   if (r.associationId) {
-    await ghl.relate(r.associationId, id, contactId).catch((e) => {
+    const [first, second] = r.associationContactFirst ? [contactId, id] : [id, contactId];
+    await ghl.relate(r.associationId, first, second).catch((e) => {
       if (!isConflict(e)) throw e;
     });
   }
