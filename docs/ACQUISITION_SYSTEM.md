@@ -144,8 +144,8 @@ Legal (counsel and broker in writing; I'm not your lawyer):
 Systems:
 - [ ] Section 4 GHL build is done and `npm run ghl:provision` shows no missing pieces.
 - [ ] Section 5 WAVV settings are done. **The voicemail recording slot is empty.**
-- [ ] Vercel env vars are set (section 6). The webhook is registered; the test
-  event shows `state: "ingested"`.
+- [ ] Vercel env vars are set (section 6). The webhook is registered; the first test
+  call shows `state: "ingested"` (WAVV has no test-delivery button).
 - [ ] 25-record test batch pushed and checked (section 9).
 - [ ] 10 test calls (to your own and team phones) made. Check:
   - the disposition applies;

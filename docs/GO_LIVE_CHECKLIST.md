@@ -236,8 +236,10 @@ WAVV → Integrations → Webhooks → Add:
 - URL `https://www.housesoldnj.com/api/hooks/wavv`
 - Events: `call.ended`, `call.recorded` (`call.started`, `call.incoming` optional)
 - Copy the `whsec_…` secret → Vercel `WAVV_WEBHOOK_SECRET` → **Redeploy**
-  (Deployments → latest → ⋯ → Redeploy). Then send WAVV's test event; the
-  response should say `"state":"ingested"` (a bad secret returns 401).
+  (Deployments → latest → ⋯ → Redeploy). WAVV has no test-delivery button
+  (docs.wavv.com). Check: an unsigned POST to the URL returns 401 (secret
+  loaded) not 503 (secret missing); then one real test call shows on
+  `/admin/calls` with `state: "ingested"`.
 
 ---
 
