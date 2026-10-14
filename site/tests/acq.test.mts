@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { dispositionKey, MAX_ATTEMPTS, missingQualification, planDisposition, type ContactState, type OppState } from "../src/lib/acq/dispositions.ts";
 import { auditCall, callWindowFlags, isFederalHoliday, trainedCallers } from "../src/lib/acq/compliance.ts";
-import { verifyWavvSignature } from "../src/lib/acq/wavv.ts";
+import { matchWavvSignature, verifyWavvSignature } from "../src/lib/acq/wavv.ts";
 import { formatIntel, planIntel, type CallIntel } from "../src/lib/acq/callIntel.ts";
 import { Ghl } from "../src/lib/acq/ghl.ts";
 import { cf, matchFields, matchStages, pushOwner, resetResolveCache, resolve, toFieldValue, type IdMap, type WaveRecord } from "../src/lib/acq/sync.ts";
@@ -207,6 +207,14 @@ test("WAVV signature: valid, tampered, stale, and whsec_ key forms", () => {
   assert.ok(!verifyWavvSignature(body + " ", sig("whsec_abc"), "whsec_abc", t));
   assert.ok(!verifyWavvSignature(body, sig("whsec_abc", body, t - 1000), "whsec_abc", t));
   assert.ok(!verifyWavvSignature(body, null, "whsec_abc", t));
+  // Variants seen in the wild: body-only message, base64 digest, base64-decoded key, millisecond timestamps.
+  const hm = (key: Buffer | string, msg: string, enc: "hex" | "base64") => createHmac("sha256", key).update(msg).digest(enc);
+  assert.deepEqual(matchWavvSignature(body, `t=${t},v1=${hm("whsec_abc", body, "hex")}`, "whsec_abc", t), { key: "raw", msg: "body", enc: "hex" });
+  assert.deepEqual(matchWavvSignature(body, `t=${t},v1=${hm("whsec_abc", `${t}.${body}`, "base64")}`, "whsec_abc", t), { key: "raw", msg: "t.body", enc: "base64" });
+  const k64 = Buffer.from("supersecretkey").toString("base64");
+  assert.deepEqual(matchWavvSignature(body, `t=${t},v1=${hm(Buffer.from("supersecretkey"), `${t}.${body}`, "hex")}`, `whsec_${k64}`, t)?.key, "base64");
+  assert.ok(matchWavvSignature(body, `t=${t * 1000},v1=${hm("whsec_abc", `${t * 1000}.${body}`, "hex")}`, "whsec_abc", t));
+  assert.equal(matchWavvSignature(body, `t=${t},v1=${hm("wrong", `${t}.${body}`, "hex")}`, "whsec_abc", t), null);
 });
 
 // ------------------------------------------------------------ AI review --
