@@ -157,6 +157,14 @@ def rows_from_file(entry: dict) -> tuple[list[dict], list[dict]]:
         est = ac.to_num(g("est_value"))
         mort = ac.to_num(g("mortgage_balance"))
         flags = {k: ac.to_bool(g(k)) for k in ac.FLAGS}
+        fdoc = ac.foreclosure_active(g("foreclosure_doc"))
+        if fdoc and "foreclosure_default_date" in cmap["fields"]:
+            # A filing counts only with a loan default inside 24 months; undated
+            # filings are usually years old (BatchLeads writes 01-01-1970 for none).
+            dflt = ac.to_date(g("foreclosure_default_date"))
+            fdoc = bool(dflt and dflt.year > 1971 and (pull - dflt).days <= 730)
+        if fdoc is not None and not flags.get("preforeclosure"):
+            flags["preforeclosure"] = fdoc
         if co["flag"]:
             flags[co["flag"]] = True  # the query guarantees it
         sale_date = ac.to_date(g("last_sale_date"))
@@ -185,6 +193,7 @@ def rows_from_file(entry: dict) -> tuple[list[dict], list[dict]]:
                 else "P|" + ac.norm_name(last) + "|" + ac.norm_name(first)[:1])
         okey += "|" + ac.address_key(maddr, mzip, mcity)
 
+        opted_out = bool(ac.to_bool(g("opt_out")))  # vendor opt-out: every number off-limits
         phones = []
         for rank, (k, grp) in enumerate(sorted(cmap["phones"].items(),
                                                key=lambda kv: (len(kv[0]), kv[0]))):
@@ -194,7 +203,8 @@ def rows_from_file(entry: dict) -> tuple[list[dict], list[dict]]:
             phones.append({
                 "number": num,
                 "type": ac.phone_type(r[grp["type"]] if "type" in grp else "", grp["base"]),
-                "vendor_dnc": ac.to_bool(r[grp["dnc"]]) if "dnc" in grp else None,
+                "vendor_dnc": (True if opted_out else
+                               ac.to_bool(r[grp["dnc"]]) if "dnc" in grp else None),
                 "vendor_litigator": (ac.to_bool(r[grp["litigator"]]) if "litigator" in grp
                                      else ac.to_bool(g("litigator"))),
                 "rank": rank,
@@ -228,7 +238,9 @@ def rows_from_file(entry: dict) -> tuple[list[dict], list[dict]]:
         })
         owners.append({
             "owner_key": okey, "first_name": first, "last_name": last, "full_name": full,
-            "owner2": g("owner2_full") or "", "owner_type": ac.owner_type(full),
+            "owner2": (g("owner2_full")
+                       or " ".join(x for x in (g("owner2_first"), g("owner2_last")) if x) or ""),
+            "owner_type": ac.owner_type(full),
             "mailing_address": maddr, "mailing_city": mcity, "mailing_state": mstate,
             "mailing_zip": mzip, "mailing_inferred": mailing_inferred,
             "phones": phones, "emails": emails, "pull_date": pull,
