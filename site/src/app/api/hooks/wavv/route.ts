@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { after, NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { ingestWavvEvent, processWavvEvent } from "@/lib/acq/processor";
@@ -16,11 +17,20 @@ export const maxDuration = 300;
  * retry, so the event is only acknowledged once it is safely stored.
  */
 export async function POST(req: NextRequest) {
-  const secret = process.env.WAVV_WEBHOOK_SECRET;
+  // Pasted env values often carry a stray space or newline; a whsec_ secret never does.
+  const secret = process.env.WAVV_WEBHOOK_SECRET?.trim();
   if (!secret) return NextResponse.json({ ok: false, error: "not_configured" }, { status: 503 });
   const raw = await req.text();
-  if (!verifyWavvSignature(raw, req.headers.get("x-wavv-signature"), secret)) {
-    console.warn("WAVV WEBHOOK bad signature");
+  const header = req.headers.get("x-wavv-signature");
+  if (!verifyWavvSignature(raw, header, secret)) {
+    // Non-reversible diagnostics only: secret shape + fingerprint, header shape, clock skew.
+    const t = header?.match(/t=(\d+)/)?.[1];
+    console.warn(
+      `WAVV WEBHOOK bad signature secret_len=${secret.length} secret_prefix_ok=${secret.startsWith("whsec_")} ` +
+        `secret_fp=${createHash("sha256").update(secret).digest("hex").slice(0, 8)} ` +
+        `header=${header ? header.replace(/v1=([0-9a-fA-F]+)/g, (_m, h: string) => `v1=<${h.length} hex>`) : "missing"} ` +
+        `skew_s=${t ? Math.floor(Date.now() / 1000) - Number(t) : "n/a"} body_len=${raw.length}`,
+    );
     return NextResponse.json({ ok: false }, { status: 401 });
   }
   let evt: WavvEvent;
