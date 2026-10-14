@@ -29,6 +29,7 @@ import {
   setIntel,
   setTranscript,
   upsertCall,
+  contactSuppressedSince,
   type CallRow,
 } from "./store";
 import { cf, ensureOpportunity, OPP_ID_FIELD, readFields, resolve, type Resolved } from "./sync";
@@ -120,6 +121,7 @@ function contactState(ctx: Ctx): ContactState {
     conversations: Number(f["Conversations"] ?? 0) || 0,
     phones: [...new Set(phones)],
     invalidPhones: String(f["Invalid Phones"] ?? "").split("\n").filter(Boolean),
+    suppressed: String(f["Dial Lane"] ?? "") === "suppressed" || (ctx.contact.tags ?? []).includes(TAGS.dnc),
     propertyCount: Number(f["Property Count"] ?? 1) || 1,
     primaryPropertyId: (ctx.opp?.fields["Primary Property ID"] as string) ?? null,
   };
@@ -210,20 +212,31 @@ export async function processEnded(db: Db, id: string): Promise<string> {
     console.warn(`ACQ ENDED SKIPPED call=${id} reason=no_contact_id`);
     return "skipped";
   }
+  if (!call.disposition && !(call.seconds ?? 0)) {
+    // Aborted dial: no disposition, zero seconds. Not an attempt.
+    await finishEnded(db, id, { status: "skipped", error: "aborted dial — no disposition, 0 s" });
+    console.info(`ACQ ENDED SKIPPED call=${id} reason=aborted_dial`);
+    return "skipped";
+  }
   try {
     const ctx = await loadContext(ghl, call.contactId);
     const key = dispositionKey(call.disposition, call.outcome);
     const at = new Date(call.endedAt ?? call.startedAt ?? Date.now());
     const cs = contactState(ctx);
     const dialed = digits(call.phone) || null;
+    // Judge suppression as of dial time: a DNC recorded after this call
+    // started (calls can be processed out of order) is not a violation.
+    const startedAt = new Date(call.startedAt ?? at);
+    const since = cs.suppressed ? await contactSuppressedSince(db, call.contactId) : null;
+    const suppressedAfterDial = Boolean(since && since.getTime() > startedAt.getTime());
     const flags: Flag[] = auditCall({
       at: new Date(call.startedAt ?? at),
       direction: call.direction,
       dialed,
       human: call.human,
       seconds: call.seconds ?? 0,
-      lane: cs.lane,
-      tags: ctx.contact.tags ?? [],
+      lane: suppressedAfterDial ? "" : cs.lane,
+      tags: suppressedAfterDial ? (ctx.contact.tags ?? []).filter((t) => t !== TAGS.dnc) : ctx.contact.tags ?? [],
       zones: String(ctx.fields["Call Zones"] ?? "").split(",").filter(Boolean),
       scrubDate: (ctx.fields["DNC Scrub Date"] as string) || null,
       phones: cs.phones,

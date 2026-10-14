@@ -86,6 +86,20 @@ test("no answer: every second miss rotates to the next number; Sunday rolls to M
   assert.equal(q.contactFields["Next Call Due"], "2026-10-12");
 });
 
+test("a call processed after the contact was DNC'd never re-queues or recycles it", () => {
+  for (const key of ["NO_ANSWER", "VOICEMAIL", "HOT", "CALLBACK"] as const) {
+    const p = planDisposition(key, call({ human: null, seconds: 0 }), contact({ attempts: 7, lane: "suppressed", suppressed: true }), opp("Qualified Hot"));
+    assert.equal(p.contactFields["Dial Lane"], undefined, `${key}: lane untouched`);
+    assert.equal(p.contactFields["Next Call Due"], undefined, `${key}: no new call date`);
+    assert.equal(p.contactFields["Last Disposition"], undefined, `${key}: DNC stays the last disposition`);
+    assert.equal(p.contactFields["Call Attempts"], 8, `${key}: attempt still counted`);
+    assert.equal(p.opp, null, `${key}: deal untouched`);
+    assert.equal(p.notify, null, `${key}: no alert`);
+  }
+  const dnc = planDisposition("DNC", call(), contact({ lane: "suppressed", suppressed: true }), opp("Qualified Hot"));
+  assert.equal(dnc.contactFields["Dial Lane"], "suppressed");
+});
+
 test(`no answer #${MAX_ATTEMPTS}: recycle 90 days, card abandoned`, () => {
   const p = planDisposition("NO_ANSWER", call({ human: null, seconds: 0 }), contact({ attempts: MAX_ATTEMPTS - 1 }), opp("Attempting Contact"));
   assert.equal(p.contactFields["Dial Lane"], "recycle");

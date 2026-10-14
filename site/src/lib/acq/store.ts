@@ -271,3 +271,13 @@ export async function recentCalls(db: Db, days: number, limit = 500): Promise<Ca
   );
   return rows.map(toCall);
 }
+
+/** When this contact first landed on the internal suppression list (null = never). */
+export async function contactSuppressedSince(db: Db, contactId: string): Promise<Date | null> {
+  const rows = await db.q<{ first: string | Date | null }>(
+    `SELECT MIN(created_at) AS first FROM acq_suppression WHERE contact_id = $1 OR (kind = 'contact' AND value = $1)`,
+    [contactId]
+  );
+  const v = rows[0]?.first;
+  return v ? new Date(v) : null;
+}
