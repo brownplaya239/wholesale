@@ -47,6 +47,7 @@ export async function POST(req: NextRequest) {
   const db = await getDb();
   if (!db) return NextResponse.json({ ok: false, error: "no_db" }, { status: 503 });
   const state = await ingestWavvEvent(db, evt);
+  console.info(`WAVV WEBHOOK ${evt.event ?? "?"} call=${evt.data?.id ?? "?"} contact=${evt.data?.contactId ? "yes" : "none"} state=${state}`);
   if (state === "ingested") {
     after(async () => {
       try {

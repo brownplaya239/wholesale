@@ -202,10 +202,12 @@ export async function processEnded(db: Db, id: string): Promise<string> {
   const ghl = ghlFromEnv();
   if (!ghl) {
     await finishEnded(db, id, { status: "skipped", error: "GHL not configured" });
+    console.warn(`ACQ ENDED SKIPPED call=${id} reason=ghl_not_configured`);
     return "skipped";
   }
   if (!call.contactId) {
     await finishEnded(db, id, { status: "skipped", error: "manual dial — no CRM contact id" });
+    console.warn(`ACQ ENDED SKIPPED call=${id} reason=no_contact_id`);
     return "skipped";
   }
   try {
@@ -232,6 +234,7 @@ export async function processEnded(db: Db, id: string): Promise<string> {
     const oppId = await applyPlan(db, ctx, plan, call);
     const d = dims(ctx, call);
     await finishEnded(db, id, { status: "done", dispositionKey: key, conversation: plan.conversation, plan, flags, dims: d });
+    console.info(`ACQ ENDED DONE call=${id} disposition=${key} opp=${oppId ?? "none"} flags=${flags.map((f) => f.code).join(",") || "none"}`);
 
     const name = [ctx.contact.firstName, ctx.contact.lastName].filter(Boolean).join(" ") || "Contact";
     const violations = flags.filter((f) => f.severity === "violation");
