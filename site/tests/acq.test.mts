@@ -229,7 +229,7 @@ const intel = (o: Partial<CallIntel> = {}, comp: Partial<CallIntel["compliance"]
   lead_temperature: "hot",
   temperature_reason: "intent, motivation, 60-day timeline, open to offer",
   key_quote: "I just want it gone",
-  compliance: { opt_out_requested: false, opt_out_quote: null, recording_disclosed: "yes", license_disclosed: "yes", caller_quoted_price_or_terms: false, caller_quote: null, concerns: [], ...comp },
+  compliance: { opt_out_requested: false, opt_out_quote: null, recording_disclosed: "yes", identity_disclosed: "yes", caller_quoted_price_or_terms: false, caller_quote: null, concerns: [], ...comp },
   qa: { opening: 4, tone: 4, discovery: 4, listening: 4, qualification: 4, objection_handling: 3, control: 4, closing: 4, notes_accuracy: "accurate", coaching_note: "ask about liens" },
   summary: "Owner relocating, vacant house needs a roof, wants out in 60 days.",
   ...o,
@@ -249,9 +249,9 @@ test("AI review: missed opt-out forces DNC; hidden hot alerts; inflated hot gets
 });
 
 test("AI review: disclosure misses, quoted price, listed property, estate", () => {
-  const p = planIntel(intel({ listing_status: "listed_with_agent", owner_deceased: true }, { recording_disclosed: "no", license_disclosed: "no", caller_quoted_price_or_terms: true, caller_quote: "we'd pay 250" }), "WARM", "c5");
+  const p = planIntel(intel({ listing_status: "listed_with_agent", owner_deceased: true }, { recording_disclosed: "no", identity_disclosed: "no", caller_quoted_price_or_terms: true, caller_quote: "we'd pay 250" }), "WARM", "c5");
   assert.equal(p.suppressListedProperty, true);
-  assert.ok(p.qaFlags.includes("no recording disclosure") && p.qaFlags.includes("no license/brokerage disclosure"));
+  assert.ok(p.qaFlags.includes("no recording disclosure") && p.qaFlags.includes("no caller/business identification"));
   assert.ok(p.qaFlags.some((f) => /quoted price/.test(f)));
   assert.ok(p.tagsAdd.includes("research:estate"));
   assert.equal(formatIntel(intel()).split("\n").length, 12);

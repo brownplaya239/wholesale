@@ -36,16 +36,17 @@ Log each refresher as a new row (`training_type` = refresher / remedial).
 - Every call is governed by federal and state telemarketing law.
 - One unlawful call can cost $500–$1,500, there is no cap, and people make a
   business of suing over it.
-- The rules below protect the business, Sumeet's real estate license, and
-  you.
+- The rules below protect the business, Sumeet, and you.
 
 **2. Who we are and the opening (10 min).**
 - Memorize the opening in procedures §5.3, word for word: your name, calling
-  for Sumeet Sancheti, licensed agent with Coldwell Banker Realty, also buys
-  directly, "this call may be recorded", the property.
-- Never skip the recording sentence or the license line. Never say "I'm not an
-  agent". Never claim to be a neighbor, a city or bank employee, or anything
-  untrue.
+  for Sumeet Sancheti with House Sold NJ, he buys houses and land, "this call
+  may be recorded", the property.
+- Never skip the recording sentence. Don't bring up licensing or a brokerage.
+  If the owner asks whether Sumeet is an agent or realtor, tell the truth:
+  "Yes, he's a licensed agent, and he also buys directly. He'll walk you
+  through every option." Never deny it. Never claim to be a neighbor, a city
+  or bank employee, or anything untrue.
 
 **3. Where and when you dial (10 min).**
 - Dial only from your assigned GHL smart-list queues through WAVV. Never from
@@ -165,7 +166,8 @@ Log each refresher as a new row (`training_type` = refresher / remedial).
 8. Thank them, end the call, disposition *Already Listed*.
 9. No. Only numbers on the GHL record, only through WAVV. Pass the new number
    to Sumeet to add properly.
-10. That Sumeet is a licensed agent with Coldwell Banker Realty, and that the
-    call may be recorded (plus the property you're calling about).
+10. Your name, that you're calling for Sumeet Sancheti with House Sold NJ,
+    and that the call may be recorded (plus the property you're calling
+    about).
 11. Pass it to Sumeet the same day; he enters it within one business day.
 12. Fields during the call; disposition last.

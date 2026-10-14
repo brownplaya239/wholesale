@@ -83,13 +83,18 @@ BatchLeads pull adds Camden, Mercer, Atlantic, Cumberland, Ocean, Burlington, Gl
   lane only, 1 line until counsel signs off on abandonment (3%/30 days, 47 CFR
   64.1200(a)(7)); FL/OK/MD owners or area codes = manual lane, single line.
   Calling policy Mon–Sat 9am–8pm in the owner's zone (mailing state), no Sundays or
-  federal holidays. "This call may be recorded" + Sum's license/Coldwell Banker in
-  the opening. Callers never quote price, offers, commission or listing terms.
+  federal holidays. "This call may be recorded" + caller name + "calling for
+  Sumeet Sancheti with House Sold NJ" in the opening. No brokerage/license line
+  in caller scripts (owner decision 2026-10-14); Sum discloses license status
+  at the consultation and in writing before any contract, and callers never
+  deny it if asked. Callers never quote price, offers, commission or listing terms.
 - Sum IS a licensed NJ real estate agent (updated 2026-08-11) — the
   unlicensed-brokering concern is moot; the binding rules are NJ REC's:
-  disclose license status at first contact and in writing (and in any
-  contract where Sum buys as principal); solicitation runs under the
-  brokerage identity per office policy; NEVER solicit another broker's
+  disclose license status in writing (and in any contract where Sum
+  buys as principal). Owner decision 2026-10-14: callers no longer name
+  Coldwell Banker or the license in the opening; Sum discloses at the first
+  consultation. Check Coldwell Banker office policy on unbranded
+  solicitation; NEVER solicit another broker's
   active listings (05/06 suppress via
   data/processed/suppress_active_listings.csv — keep the MLS export fresh);
   leads may be converted to listings — present buy-vs-list options honestly.

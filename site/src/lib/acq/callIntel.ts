@@ -10,7 +10,7 @@
  *   - owner said it's listed, caller didn't mark it        -> property suppressed + alert
  *   - AI hears a hot/warm seller the caller marked lower   -> "hidden hot" alert to Sum
  *   - caller marked Hot/Booked, AI hears no real intent    -> QA review (inflation)
- *   - no recording/license disclosure, caller quoted price -> QA flags per caller
+ *   - no recording disclosure / caller identification, caller quoted price -> QA flags per caller
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
@@ -53,7 +53,7 @@ export const CallIntelSchema = z.object({
     opt_out_requested: z.boolean(),
     opt_out_quote: z.string().nullable(),
     recording_disclosed: z.enum(["yes", "no", "unclear"]),
-    license_disclosed: z.enum(["yes", "no", "unclear"]),
+    identity_disclosed: z.enum(["yes", "no", "unclear"]),
     caller_quoted_price_or_terms: z.boolean(),
     caller_quote: z.string().nullable(),
     concerns: z.array(z.string()),
@@ -76,7 +76,7 @@ export const CallIntelSchema = z.object({
 });
 export type CallIntel = z.infer<typeof CallIntelSchema>;
 
-const SYSTEM = `You audit outbound acquisition calls for a New Jersey real estate business. The principal is Sumeet Sancheti, a licensed NJ real estate salesperson with Coldwell Banker Realty, who buys houses and land directly, assigns some contracts to investors, and lists others. Callers phone property owners from a list, qualify them, and book a consultation with Sumeet. You get one call's transcript (speaker labels may be wrong or missing — infer who is talking from context), the disposition the caller chose, the caller's note, and what the list says about the owner and property.
+const SYSTEM = `You audit outbound acquisition calls for a New Jersey real estate business. The principal is Sumeet Sancheti (House Sold NJ), a licensed NJ real estate salesperson who buys houses and land directly, assigns some contracts to investors, and lists others. Callers phone property owners from a list, qualify them, and book a consultation with Sumeet. You get one call's transcript (speaker labels may be wrong or missing — infer who is talking from context), the disposition the caller chose, the caller's note, and what the list says about the owner and property.
 
 Report only what was actually said. Use null (or "unknown"/"unclear") for anything not discussed; never fill gaps with guesses from the list data. Keep each text field under 25 words, in plain words, quoting numbers exactly as spoken.
 
@@ -90,9 +90,9 @@ Lead temperature — use these definitions exactly:
 Compliance — be strict, these protect the business:
 - opt_out_requested: true if the person asked in ANY wording to stop calling, be removed, not be called again, or "put me on your do-not-call list" — even politely, even mid-call. "Not interested" by itself is NOT an opt-out. Quote their words in opt_out_quote.
 - recording_disclosed: did the caller say the call may be recorded, near the start?
-- license_disclosed: did the caller identify Sumeet as a licensed real estate agent/salesperson (or name Coldwell Banker) early in the call?
+- identity_disclosed: did the caller give their own name and say they are calling for Sumeet Sancheti or House Sold NJ, early in the call? Callers are told NOT to bring up licensing or a brokerage; that is correct, not a gap.
 - caller_quoted_price_or_terms: true if the CALLER stated a purchase price, an offer, a price range, a commission, or listing terms. (Asking the owner what they hope to get is fine and expected.) Quote it.
-- concerns: anything else a compliance reviewer should see — pressure tactics, misrepresentation, claims of a guaranteed cash purchase, discussing a property listed with another broker after learning it was listed, a minor or a confused person on the line. Empty list if none.
+- concerns: anything else a compliance reviewer should see — pressure tactics, misrepresentation, claims of a guaranteed cash purchase, discussing a property listed with another broker after learning it was listed, denying or dodging that Sumeet is a licensed agent when the owner asked, a minor or a confused person on the line. Empty list if none.
 
 listing_status: listed_with_agent if the owner said the property is currently listed or under contract with an agent; recently_expired if a listing ended; talking_to_agent if they are interviewing agents.
 
@@ -199,7 +199,7 @@ export function planIntel(i: CallIntel, key: DispositionKey, callId: string): In
   }
   const live = LIVE_OWNER.has(i.spoke_with);
   if (live && i.compliance.recording_disclosed === "no") qaFlags.push("no recording disclosure");
-  if (live && i.compliance.license_disclosed === "no") qaFlags.push("no license/brokerage disclosure");
+  if (live && i.compliance.identity_disclosed === "no") qaFlags.push("no caller/business identification");
   if (i.compliance.caller_quoted_price_or_terms) qaFlags.push(`caller quoted price/terms: "${i.compliance.caller_quote ?? ""}"`);
   for (const c of i.compliance.concerns) qaFlags.push(`concern: ${c}`);
   if (i.qa?.notes_accuracy === "inaccurate") qaFlags.push("caller note contradicts the call");
