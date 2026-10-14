@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { after, NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { ingestWavvEvent, processWavvEvent } from "@/lib/acq/processor";
-import { verifyWavvSignature, type WavvEvent } from "@/lib/acq/wavv";
+import { matchWavvSignature, type WavvEvent } from "@/lib/acq/wavv";
 
 export const runtime = "nodejs";
 // CRM updates, transcript fetch, AI review and hot-lead reports run after the
@@ -22,16 +22,21 @@ export async function POST(req: NextRequest) {
   if (!secret) return NextResponse.json({ ok: false, error: "not_configured" }, { status: 503 });
   const raw = await req.text();
   const header = req.headers.get("x-wavv-signature");
-  if (!verifyWavvSignature(raw, header, secret)) {
+  const scheme = matchWavvSignature(raw, header, secret);
+  if (!scheme) {
     // Non-reversible diagnostics only: secret shape + fingerprint, header shape, clock skew.
     const t = header?.match(/t=(\d+)/)?.[1];
     console.warn(
       `WAVV WEBHOOK bad signature secret_len=${secret.length} secret_prefix_ok=${secret.startsWith("whsec_")} ` +
         `secret_fp=${createHash("sha256").update(secret).digest("hex").slice(0, 8)} ` +
         `header=${header ? header.replace(/v1=([0-9a-fA-F]+)/g, (_m, h: string) => `v1=<${h.length} hex>`) : "missing"} ` +
-        `skew_s=${t ? Math.floor(Date.now() / 1000) - Number(t) : "n/a"} body_len=${raw.length}`,
+        `skew_s=${t ? Math.floor(Date.now() / 1000) - Number(t) : "n/a"} body_len=${raw.length} ` +
+        `sig_headers=${[...req.headers.keys()].filter((k) => /sig|wavv|hmac/i.test(k)).join("|") || "none"}`,
     );
     return NextResponse.json({ ok: false }, { status: 401 });
+  }
+  if (scheme.key !== "raw" || scheme.msg !== "t.body" || scheme.enc !== "hex") {
+    console.info(`WAVV WEBHOOK signature matched non-default scheme key=${scheme.key} msg=${scheme.msg} enc=${scheme.enc}`);
   }
   let evt: WavvEvent;
   try {
