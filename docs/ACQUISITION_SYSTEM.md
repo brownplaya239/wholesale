@@ -391,7 +391,7 @@ Policy breaches (9am–8pm, Sundays, federal holidays) and dropped connects show
   - "it's listed" → property suppressed;
   - hidden hot → alert;
   - inflated hot → QA;
-  - missing recording or license disclosure, or a caller quoting price → QA flag.
+  - missing recording disclosure or caller identification, a caller denying Sumeet is licensed, or a caller quoting price → QA flag.
 - **Is not:** a caller, a texter, or the source of truth. It never overwrites
   caller fields. No AI voice, no voicemail drops, no bulk SMS. The cold lists
   carry zero consent artifacts.
@@ -424,10 +424,14 @@ Policy breaches (9am–8pm, Sundays, federal holidays) and dropped connects show
 
 ## 10. Caller script (compliance lines are not optional)
 
-> "Hi, is this {first name}? This is {caller} calling for Sumeet Sancheti — he's
-> a licensed real estate agent with Coldwell Banker Realty here in New Jersey,
-> and he also buys properties directly. **This call may be recorded.** I'm
-> calling about {property street} — is that still yours?"
+> "Hi, is this {first name}? This is {caller} calling for Sumeet Sancheti with
+> House Sold NJ — he buys houses and land here in New Jersey. **This call may be
+> recorded.** I'm calling about {property street} — is that still yours?"
+
+- **No brokerage in the opening** (owner decision 2026-10-14). Sumeet discloses
+  his license status at the consultation and in writing before any contract.
+  Asked "is he an agent?": "Yes, he's a licensed agent, and he also buys
+  directly." Never deny it.
 
 - **Confirm the owner first.** If it's someone else: "Who would I speak with
   about the property?" If "he passed away": slow down, offer condolences, and

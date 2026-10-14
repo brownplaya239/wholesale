@@ -13,7 +13,7 @@ placing a call.
 
 | | |
 |---|---|
-| Calls are made on behalf of | Sumeet Sancheti, NJ Licensed Real Estate Salesperson #2082408, Coldwell Banker Realty (335 Route 9 South, Manalapan, NJ 07726) |
+| Calls are made on behalf of | Sumeet Sancheti, House Sold NJ |
 | Compliance owner | Sumeet Sancheti — (908) 596-0242 · sum@housesoldnj.com |
 | Dialer | WAVV, embedded in GoHighLevel (HouseSoldNJ sub-account) |
 | Caller-ID numbers | `__________` (record each number; all registered, all answered or routed to a voicemail that names the business) |
@@ -104,15 +104,19 @@ rules that differ for them.
    - The cadence is 8 attempts over about 30 days, then 90 days of rest.
    - Every number for a person counts toward that person's limit.
 3. **Opening, every call, before anything else:**
-   > "Hi, is this {first name}? This is {caller} calling for Sumeet Sancheti —
-   > he's a licensed real estate agent with Coldwell Banker Realty here in New
-   > Jersey, and he also buys properties directly. This call may be recorded.
-   > I'm calling about {property street} — is that still yours?"
+   > "Hi, is this {first name}? This is {caller} calling for Sumeet Sancheti
+   > with House Sold NJ — he buys houses and land here in New Jersey. This call
+   > may be recorded. I'm calling about {property street} — is that still
+   > yours?"
 
-   This states the caller's name, the person and brokerage the call is for,
-   that the caller is a licensee, the purpose, and that the call is recorded
-   (47 C.F.R. § 64.1200(d)(4)). If asked, give the callback number
-   `__________` and the office address in §1.
+   This states the caller's name, the person and business the call is for,
+   the purpose, and that the call is recorded (47 C.F.R. § 64.1200(d)(4)). If
+   asked, give the callback number `__________`.
+   Callers do not name a brokerage (owner decision 2026-10-14). Sumeet
+   discloses his license status himself at the consultation and in writing
+   before any contract. If an owner asks whether Sumeet is an agent or a
+   realtor, answer truthfully: "Yes, he's a licensed agent, and he also buys
+   directly. He'll walk you through every option." Never deny it.
 4. **Caller ID.** WAVV must always transmit a caller-ID number we own and
    answer, with the business name where the carrier supports it (47 C.F.R.
    § 64.1601(e)). Never block caller ID. Never spoof another number.
@@ -122,8 +126,8 @@ rules that differ for them.
    - The WAVV voicemail-drop recording slot stays **empty**. In multi-line mode
      WAVV drops any recording automatically.
    - Callers may leave a live voicemail, spoken by the caller: "Hi, this is
-     {caller} calling for Sumeet Sancheti, a licensed real estate agent with
-     Coldwell Banker Realty, about {property street}. You can reach us at
+     {caller} calling for Sumeet Sancheti with House Sold NJ, about
+     {property street}. You can reach us at
      {number}. Thank you."
 6. **One line.**
    - WAVV runs single-line until counsel approves more in writing.
@@ -176,7 +180,7 @@ an opt-out the caller did not record, the same suppression is applied
 automatically and the compliance owner is alerted.
 
 **Requests that arrive any other way** (callback, voicemail, text STOP, email,
-letter, in person, through Coldwell Banker): the person who receives it tells
+letter, in person, through any office): the person who receives it tells
 the compliance owner the same day. The compliance owner, **within one business
 day**:
 - in GHL: adds the tag `dnc`, sets Dial Lane `suppressed` and turns DND on for
@@ -236,7 +240,7 @@ Lead data never goes into git.
 2. **AI review of every recorded conversation** flags:
    - missed opt-outs (auto-suppressed);
    - listed properties;
-   - missing recording or license disclosure;
+   - missing recording disclosure or caller identification;
    - callers quoting prices or terms;
    - other concerns.
 3. **Daily:** the compliance owner reads every ⚠️ compliance and 🤖 call-review
