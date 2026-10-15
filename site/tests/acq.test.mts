@@ -702,3 +702,15 @@ test("queue tag: stable per owner, split across callers, off when unset", () => 
   for (let i = 0; i < 1000; i++) counts[queueTag(`owner-${i}`, env)!]++;
   assert.ok(counts["q:alex"] > 400 && counts["q:kate"] > 400, JSON.stringify(counts));
 });
+
+test("one attempt per day: a same-day redial keeps the attempt count and is flagged; a 4th call in 24 h is a violation", () => {
+  const c: ContactState = { lane: "power", attempts: 1, conversations: 0, phones: ["8562221111", "8563334444"], invalidPhones: [], propertyCount: 1 };
+  const again = planDisposition("NO_ANSWER", { at: TUE, human: false, seconds: 20, dialed: "8562221111", sameDay: true }, c, null);
+  assert.equal(again.contactFields["Call Attempts"], 1);
+  const next = planDisposition("NO_ANSWER", { at: TUE, human: false, seconds: 20, dialed: "8562221111" }, c, null);
+  assert.equal(next.contactFields["Call Attempts"], 2);
+  const base = { at: TUE, direction: "outbound", dialed: "8562221111", human: false, seconds: 20, lane: "power", tags: [], zones: ["America/New_York"], scrubDate: "2026-10-01", phones: ["8562221111"], inboundConsent: false };
+  assert.ok(auditCall({ ...base, prior: { sameDay: 1, last24h: 1 } }).some((f) => f.code === "same_day_redial" && f.severity === "policy"));
+  assert.ok(auditCall({ ...base, prior: { sameDay: 3, last24h: 3 } }).some((f) => f.code === "over_3_calls_24h" && f.severity === "violation"));
+  assert.ok(!auditCall({ ...base, prior: { sameDay: 0, last24h: 0 } }).some((f) => /redial|over_3/.test(f.code)));
+});

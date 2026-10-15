@@ -84,7 +84,15 @@ export type OppState = {
   fields: Record<string, unknown>;
 } | null;
 
-export type CallFacts = { at: Date; human: boolean | null; seconds: number; dialed: string | null; userId?: string | null };
+export type CallFacts = {
+  at: Date;
+  human: boolean | null;
+  seconds: number;
+  dialed: string | null;
+  userId?: string | null;
+  /** Another dial of this contact already happened today: same attempt, not a new one. */
+  sameDay?: boolean;
+};
 
 export type PlannedTask = { title: string; body: string; due: Date; assignTo: "caller" | "owner" };
 
@@ -150,7 +158,9 @@ function dateField(v: unknown): Date | null {
 
 export function planDisposition(key: DispositionKey, call: CallFacts, c: ContactState, opp: OppState, now = call.at): Plan {
   const label = DISPOSITIONS[key].label;
-  const attempts = c.attempts + 1;
+  // One attempt per contact per day: a same-day redial (double dial, a second
+  // number, a second caller) doesn't advance the cadence or burn an attempt.
+  const attempts = call.sameDay ? Math.max(c.attempts, 1) : c.attempts + 1;
   const LIVE: DispositionKey[] = ["NOT_INTERESTED", "CALLBACK", "WARM", "HOT", "BOOKED", "LISTED", "SOLD", "DNC"];
   const conversation = LIVE.includes(key) || (call.human === true && call.seconds >= 60 && !["NO_ANSWER", "VOICEMAIL", "WRONG_NUMBER", "WRONG_OWNER"].includes(key));
   const plan: Plan = {

@@ -131,6 +131,19 @@ export async function getCall(db: Db, id: string): Promise<CallRow | null> {
   return rows[0] ? toCall(rows[0]) : null;
 }
 
+/** Earlier dials of a contact before `before` (skipped dials don't count): same ET day and last 24 h. */
+export async function priorDials(db: Db, contactId: string, before: Date, excludeId: string): Promise<{ sameDay: number; last24h: number }> {
+  const rows = await db.q<{ started_at: string | Date }>(
+    `SELECT started_at FROM acq_calls
+      WHERE contact_id = $1 AND id <> $2 AND COALESCE(direction, 'outbound') <> 'inbound'
+        AND ended_status <> 'skipped' AND started_at < $3 AND started_at > $3::timestamptz - interval '24 hours'`,
+    [contactId, excludeId, before.toISOString()]
+  );
+  const day = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(d);
+  const today = day(before);
+  return { last24h: rows.length, sameDay: rows.filter((r) => day(new Date(r.started_at)) === today).length };
+}
+
 /** Atomically claims the disposition step (true for exactly one worker). */
 export async function claimEnded(db: Db, id: string): Promise<boolean> {
   const rows = await db.q(
