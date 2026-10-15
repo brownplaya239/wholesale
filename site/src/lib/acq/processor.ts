@@ -31,6 +31,7 @@ import {
   setTranscript,
   upsertCall,
   contactSuppressedSince,
+  priorDials,
   type CallRow,
 } from "./store";
 import { cf, ensureOpportunity, OPP_ID_FIELD, readFields, resolve, type Resolved } from "./sync";
@@ -221,6 +222,12 @@ export async function processEnded(db: Db, id: string): Promise<string> {
     console.warn(`ACQ ENDED SKIPPED call=${id} reason=no_contact_id`);
     return "skipped";
   }
+  if (/^agent\s*cancel/i.test(call.disposition ?? "")) {
+    // The caller skipped the dial in WAVV — never rang the owner. Not an attempt.
+    await finishEnded(db, id, { status: "skipped", error: "caller skipped (Agent Canceled)" });
+    console.info(`ACQ ENDED SKIPPED call=${id} reason=agent_canceled`);
+    return "skipped";
+  }
   if (!call.disposition && !(call.seconds ?? 0)) {
     // Aborted dial: no disposition, zero seconds. Not an attempt.
     await finishEnded(db, id, { status: "skipped", error: "aborted dial — no disposition, 0 s" });
@@ -238,6 +245,7 @@ export async function processEnded(db: Db, id: string): Promise<string> {
     const startedAt = new Date(call.startedAt ?? at);
     const since = cs.suppressed ? await contactSuppressedSince(db, call.contactId) : null;
     const suppressedAfterDial = Boolean(since && since.getTime() > startedAt.getTime());
+    const prior = await priorDials(db, call.contactId, startedAt, id);
     const flags: Flag[] = auditCall({
       at: new Date(call.startedAt ?? at),
       direction: call.direction,
@@ -251,8 +259,9 @@ export async function processEnded(db: Db, id: string): Promise<string> {
       phones: cs.phones,
       inboundConsent: ctx.fields["SMS Consent"] === "Web form consent",
       callerTrained: ((t) => (t ? Boolean(call.userId && t.has(call.userId)) : null))(trainedCallers()),
+      prior,
     });
-    const plan = planDisposition(key, { at, human: call.human, seconds: call.seconds ?? 0, dialed, userId: call.userId }, cs, ctx.opp);
+    const plan = planDisposition(key, { at, human: call.human, seconds: call.seconds ?? 0, dialed, userId: call.userId, sameDay: prior.sameDay > 0 }, cs, ctx.opp);
     const oppId = await applyPlan(db, ctx, plan, call);
     const d = dims(ctx, call);
     await finishEnded(db, id, { status: "done", dispositionKey: key, conversation: plan.conversation, plan, flags, dims: d });

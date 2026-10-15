@@ -96,6 +96,8 @@ export type AuditInput = {
   inboundConsent: boolean;
   /** false = caller is not on the signed training log (ACQ_TRAINED_CALLERS); null = check off. */
   callerTrained?: boolean | null;
+  /** Earlier dials of this contact (not skipped), from the call log. */
+  prior?: { sameDay: number; last24h: number };
 };
 
 /** WAVV user ids of callers with a signed training acknowledgement (compliance/CALLER_TRAINING.md). */
@@ -124,6 +126,11 @@ export function auditCall(a: AuditInput): Flag[] {
   }
   if (a.dialed && a.phones.length && !a.phones.includes(a.dialed)) {
     flags.push({ severity: "warning", code: "number_not_on_record", detail: `dialed ${a.dialed}, not a callable number on the contact` });
+  }
+  if (a.prior && a.prior.last24h >= 3) {
+    flags.push({ severity: "violation", code: "over_3_calls_24h", detail: `call #${a.prior.last24h + 1} to this person in 24 h (policy max 3; DNC_PROCEDURES §5.2)` });
+  } else if (a.prior && a.prior.sameDay >= 1) {
+    flags.push({ severity: "policy", code: "same_day_redial", detail: `dial #${a.prior.sameDay + 1} to this contact today (policy: one attempt per day) — double dial on, or two callers on one list` });
   }
   if (a.human === true && a.seconds === 0) {
     flags.push({ severity: "warning", code: "possible_abandoned", detail: "human answered, 0 s talk time (dropped connect?)" });

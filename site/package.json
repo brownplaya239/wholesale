@@ -11,7 +11,8 @@
     "ghl:provision": "tsx scripts/ghl-provision.ts",
     "ghl:push": "tsx scripts/ghl-push.ts",
     "ghl:check": "tsx scripts/ghl-check.ts",
-    "ghl:brief": "tsx scripts/ghl-brief.ts"
+    "ghl:brief": "tsx scripts/ghl-brief.ts",
+    "acq:fix-attempts": "tsx scripts/acq-fix-attempts.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",

@@ -478,6 +478,19 @@ export type PushResult = { contactId: string; newContact: boolean; properties: n
  * contact (e.g. a web lead with SMS consent) keeps their consent, lane and
  * call history — only the property records and snapshot are added.
  */
+/**
+ * ACQ_QUEUE_TAGS="q:alex,q:kate": each owner lands in exactly one caller's
+ * queue (smart list filtered on the tag), so two callers never dial the same
+ * contact. Stable per owner id; an existing q: tag is never changed.
+ */
+export function queueTag(ownerId: string, env = process.env.ACQ_QUEUE_TAGS): string | null {
+  const tags = (env ?? "").split(",").map((t) => t.trim()).filter(Boolean);
+  if (!tags.length) return null;
+  let h = 0;
+  for (const ch of ownerId) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return tags[h % tags.length];
+}
+
 export const CALL_BRIEF_MARKER = "CALL BRIEF";
 
 const titleCase = (s: string) => s.toLowerCase().replace(/\b([a-z])/g, (m) => m.toUpperCase()).replace(/\b(\d+)(St|Nd|Rd|Th)\b/g, (_m, d, x) => d + x.toLowerCase());
@@ -585,6 +598,8 @@ export async function pushOwner(ghl: Ghl, r: Resolved, rec: WaveRecord, ids: IdM
   });
   const tags = [TAGS.cold, `acq:wave-${rec.wave.toLowerCase()}`];
   if (!keepDialState) tags.push(`lane:${c.dial_lane}`, TAGS.noSms);
+  const queue = queueTag(rec.owner_id);
+  if (queue && !keepDialState && !(existing?.tags ?? []).some((t) => t.startsWith("q:"))) tags.push(queue);
   await ghl.addTags(contactId, tags);
 
   const warnings: string[] = [];
