@@ -15,7 +15,7 @@ import { auditCall, callWindowFlags, isFederalHoliday, trainedCallers } from "..
 import { matchWavvSignature, verifyWavvSignature } from "../src/lib/acq/wavv.ts";
 import { formatIntel, planIntel, type CallIntel } from "../src/lib/acq/callIntel.ts";
 import { Ghl } from "../src/lib/acq/ghl.ts";
-import { cf, matchFields, matchStages, pushOwner, resetResolveCache, resolve, toFieldValue, type IdMap, type WaveRecord } from "../src/lib/acq/sync.ts";
+import { callBrief, cf, matchFields, matchStages, pushOwner, resetResolveCache, resolve, toFieldValue, type IdMap, type WaveRecord } from "../src/lib/acq/sync.ts";
 import {
   CONTACT_FIELDS,
   DISPOSITIONS,
@@ -510,6 +510,21 @@ test("wave push: contact (no tags in upsert), property + association, opportunit
   const before = mock.opps.size;
   await pushOwner(ghl, r, waveRecord(), ids, { coldSmsDnd: true });
   assert.equal(mock.opps.size, before, "re-push creates no second opportunity");
+});
+
+test("call brief: opener with names filled, property facts, no dollar figures", async () => {
+  const b = callBrief(waveRecord());
+  assert.match(b, /^CALL BRIEF — 10 Oak St/);
+  assert.match(b, /This call may be recorded\. I'm calling about 10 Oak St/);
+  assert.ok(!/\$|300,?000|equity/i.test(b), "no value/equity numbers for callers to quote");
+  assert.ok(!/tax/i.test(b.split("NEVER:")[0]), "taxes only appear in the never-list");
+  resetResolveCache();
+  const mock = mockGhl();
+  const ghl = new Ghl({ token: "t", locationId: "LOC", fetchImpl: mock.fetchImpl, minIntervalMs: 0 });
+  const r = await resolve(ghl, { fresh: true });
+  const res = await pushOwner(ghl, r, waveRecord(), { owners: {}, properties: {} }, { coldSmsDnd: true });
+  const note = mock.calls.find((c) => c.method === "POST" && c.path === `/contacts/${res.contactId}/notes`);
+  assert.ok(note && String(note.body!.body).startsWith("CALL BRIEF"), "push adds the brief");
 });
 
 test("wave push: an existing consented web-lead contact keeps its lane and consent", async () => {

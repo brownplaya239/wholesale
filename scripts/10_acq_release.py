@@ -208,12 +208,23 @@ def next_wave_id(led: pd.DataFrame) -> str:
     return f"W{(max(nums) + 1) if nums else 1:02d}"
 
 
+def _no_nan(v):
+    """NaN/inf are not JSON (ghl:push's JSON.parse rejects them) -> null."""
+    if isinstance(v, float) and not math.isfinite(v):
+        return None
+    if isinstance(v, dict):
+        return {k: _no_nan(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_no_nan(x) for x in v]
+    return v
+
+
 def write_wave(records: list[dict], name: str) -> Path:
     WAVES.mkdir(parents=True, exist_ok=True)
     out = WAVES / f"{name}.jsonl"
     with out.open("w") as f:
         for r in records:
-            f.write(json.dumps(r, default=str) + "\n")
+            f.write(json.dumps(_no_nan(r), default=str, allow_nan=False) + "\n")
     return out
 
 

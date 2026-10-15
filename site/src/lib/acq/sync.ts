@@ -478,6 +478,69 @@ export type PushResult = { contactId: string; newContact: boolean; properties: n
  * contact (e.g. a web lead with SMS consent) keeps their consent, lane and
  * call history — only the property records and snapshot are added.
  */
+export const CALL_BRIEF_MARKER = "CALL BRIEF";
+
+const titleCase = (s: string) => s.toLowerCase().replace(/\b([a-z])/g, (m) => m.toUpperCase()).replace(/\b(\d+)(St|Nd|Rd|Th)\b/g, (_m, d, x) => d + x.toLowerCase());
+
+/**
+ * The caller's side panel for one owner: the opener with their names filled
+ * in plus what the call should cover. Deliberately has NO dollar figures
+ * (value, equity, sale price) and no tax/lien wording — callers never quote
+ * numbers or raise how the list was built. Sumeet sees the numbers on the
+ * Property record.
+ */
+export function callBrief(rec: WaveRecord): string {
+  const c = rec.contact;
+  const props = rec.properties;
+  const p = props.find((x) => x.property_id === rec.primary_property_id) ?? props[0];
+  const street = p ? titleCase(String(p.address)) : titleCase(c.primary_property ?? "");
+  const where = p ? `${street}, ${titleCase(String(p.city ?? ""))} ${p.zip ?? ""}`.trim() + (p.county ? ` (${titleCase(String(p.county))} County)` : "") : street;
+  const entity = c.owner_type !== "Individual";
+  const greet = entity ? `Hi, may I speak with whoever handles the property for ${c.full_name}?` : `Hi, is this ${titleCase(c.first_name || c.full_name)}?`;
+  const lines = [
+    `${CALL_BRIEF_MARKER} — ${where}`,
+    "",
+    `OPENER: "${greet} This is ___ calling for Sumeet Sancheti with House Sold NJ — he buys houses and land here in New Jersey. This call may be recorded. I'm calling about ${street} — is that still yours?"`,
+    "",
+  ];
+  if (p) {
+    const facts: string[] = [];
+    if (p.beds) facts.push(`${p.beds} bd`);
+    if (p.baths) facts.push(`${p.baths} ba`);
+    if (p.sqft) facts.push(`${Math.round(Number(p.sqft)).toLocaleString("en-US")} sqft`);
+    if (p.units && Number(p.units) > 1) facts.push(`${p.units} units`);
+    if (p.acres) facts.push(`${p.acres} acres`);
+    if (p.year_built) facts.push(`built ${Math.round(Number(p.year_built))}`);
+    if (p.ownership_years) {
+      const bought = typeof p.last_sale_date === "string" ? ` (since ${p.last_sale_date.slice(0, 4)})` : "";
+      facts.push(`owned ~${Math.round(Number(p.ownership_years))} yrs${bought}`);
+    }
+    if (facts.length) lines.push(`PROPERTY: ${facts.join(" · ")}`);
+    if (p.vacant === true) lines.push("OCCUPANCY: flagged vacant — confirm: \"Is anyone living there right now?\"");
+    else if (p.absentee === true || p.owner_occupied === false)
+      lines.push(`OCCUPANCY: owner doesn't live there (mail goes to ${titleCase(c.mailing_city ?? "")}, ${c.mailing_state ?? ""}) — ask who's living there now.`);
+    else if (p.owner_occupied === true) lines.push("OCCUPANCY: owner appears to live there.");
+  }
+  if (props.length > 1) {
+    const others = props.filter((x) => x !== p).map((x) => titleCase(`${x.address}, ${x.city ?? ""}`));
+    lines.push(`ALSO OWNS: ${others.slice(0, 5).join("; ")}${others.length > 5 ? ` (+${others.length - 5} more)` : ""}`);
+  }
+  lines.push(
+    "",
+    "COVER: confirm owner → what's got them thinking about it → condition/repairs → timeline → who lives there → other decision makers → roughly what they'd need → book Sumeet or a dated callback.",
+    "NEVER: a price, value, offer or range · back taxes, liens or how we found them · keep going after \"stop calling\" (→ DNC).",
+  );
+  return lines.join("\n");
+}
+
+/** Adds the call brief unless the contact already has one (safe to re-run). */
+export async function ensureCallBrief(ghl: Ghl, contactId: string, rec: WaveRecord): Promise<boolean> {
+  const notes = await ghl.listNotes(contactId);
+  if (notes.some((n) => (n.body ?? "").replace(/<[^>]+>/g, "").trimStart().startsWith(CALL_BRIEF_MARKER))) return false;
+  await ghl.addNote(contactId, callBrief(rec));
+  return true;
+}
+
 export async function pushOwner(ghl: Ghl, r: Resolved, rec: WaveRecord, ids: IdMap, opts: { coldSmsDnd: boolean }): Promise<PushResult> {
   const c = rec.contact;
   if (rec.op !== "upsert") return applyPatch(ghl, r, rec, ids);
@@ -537,6 +600,13 @@ export async function pushOwner(ghl: Ghl, r: Resolved, rec: WaveRecord, ids: IdM
     }
   }
   ids.owners[rec.owner_id] = { contactId, opportunities: opps };
+  if (!keepDialState) {
+    try {
+      await ensureCallBrief(ghl, contactId, rec);
+    } catch (e) {
+      warnings.push(`call brief note: ${(e as Error).message}`);
+    }
+  }
   return {
     contactId,
     newContact: isNew,
