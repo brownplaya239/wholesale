@@ -40,12 +40,12 @@ Log each refresher as a new row (`training_type` = refresher / remedial).
 
 **2. Who we are and the opening (10 min).**
 - Memorize the opening in procedures §5.3, word for word: your name, calling
-  for Sumeet Sancheti with House Sold NJ, he buys houses and land, "this call
-  may be recorded", the property.
-- Never skip the recording sentence. Don't bring up licensing or a brokerage.
-  If the owner asks whether Sumeet is an agent or realtor, tell the truth:
-  "Yes, he's a licensed agent, and he also buys directly. He'll walk you
-  through every option." Never deny it. Never claim to be a neighbor, a city
+  from HouseSoldNJ, "we're local real estate investors, and our calls are
+  recorded", the property.
+- Never skip the recording words. Don't bring up licensing or a brokerage.
+  If the owner asks whether you're agents or realtors, tell the truth:
+  "Yes — Sumeet Sancheti, who owns HouseSoldNJ, is a licensed agent. We also
+  buy directly, and he'll walk you through every option." Never deny it. Never claim to be a neighbor, a city
   or bank employee, or anything untrue.
 
 **3. Where and when you dial (10 min).**
@@ -166,8 +166,7 @@ Log each refresher as a new row (`training_type` = refresher / remedial).
 8. Thank them, end the call, disposition *Already Listed*.
 9. No. Only numbers on the GHL record, only through WAVV. Pass the new number
    to Sumeet to add properly.
-10. Your name, that you're calling for Sumeet Sancheti with House Sold NJ,
-    and that the call may be recorded (plus the property you're calling
-    about).
+10. Your name, that you're calling from HouseSoldNJ, and that our calls are
+    recorded (plus the property you're calling about).
 11. Pass it to Sumeet the same day; he enters it within one business day.
 12. Fields during the call; disposition last.

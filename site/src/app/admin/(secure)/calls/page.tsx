@@ -64,12 +64,19 @@ function FunnelTable({ title, rows }: { title: string; rows: { key: string; f: F
 }
 
 function CallLink({ c }: { c: CallRow }) {
-  return c.contactId ? (
-    <a href={contactUrl(c.contactId)} className="underline-offset-2 hover:underline" target="_blank" rel="noreferrer">
-      {c.phone ?? c.id.slice(0, 8)}
-    </a>
-  ) : (
-    <span>{c.phone ?? c.id.slice(0, 8)}</span>
+  return (
+    <>
+      {c.contactId ? (
+        <a href={contactUrl(c.contactId)} className="underline-offset-2 hover:underline" target="_blank" rel="noreferrer">
+          {c.dims.name || c.phone || c.id.slice(0, 8)}
+        </a>
+      ) : (
+        <span>{c.phone ?? c.id.slice(0, 8)}</span>
+      )}{" "}
+      <Link href={`/admin/calls/${encodeURIComponent(c.id)}`} className="text-xs text-ink-soft underline">
+        transcript
+      </Link>
+    </>
   );
 }
 

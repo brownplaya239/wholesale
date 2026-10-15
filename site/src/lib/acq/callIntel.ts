@@ -89,8 +89,8 @@ Lead temperature — use these definitions exactly:
 
 Compliance — be strict, these protect the business:
 - opt_out_requested: true if the person asked in ANY wording to stop calling, be removed, not be called again, or "put me on your do-not-call list" — even politely, even mid-call. "Not interested" by itself is NOT an opt-out. Quote their words in opt_out_quote.
-- recording_disclosed: did the caller say the call may be recorded, near the start?
-- identity_disclosed: did the caller give their own name and say they are calling for Sumeet Sancheti or House Sold NJ, early in the call? Callers are told NOT to bring up licensing or a brokerage; that is correct, not a gap.
+- recording_disclosed: did the caller say the call is (or may be) recorded, near the start? (Current opening: "...and our calls are recorded.")
+- identity_disclosed: did the caller give their own name and say they are calling from HouseSoldNJ (or for Sumeet Sancheti), early in the call? Callers are told NOT to bring up licensing or a brokerage; that is correct, not a gap.
 - caller_quoted_price_or_terms: true if the CALLER stated a purchase price, an offer, a price range, a commission, or listing terms. (Asking the owner what they hope to get is fine and expected.) Quote it.
 - concerns: anything else a compliance reviewer should see — pressure tactics, misrepresentation, claims of a guaranteed cash purchase, discussing a property listed with another broker after learning it was listed, denying or dodging that Sumeet is a licensed agent when the owner asked, a minor or a confused person on the line. Empty list if none.
 
@@ -175,6 +175,7 @@ export type IntelPlan = {
   alerts: string[];
   qaFlags: string[];
   note: string;
+  callbackTask: { title: string; body: string } | null;
 };
 
 const LIVE_OWNER = new Set(["owner", "co_owner_or_decision_maker", "relative_or_heir"]);
@@ -211,7 +212,15 @@ export function planIntel(i: CallIntel, key: DispositionKey, callId: string): In
     hidden && "hidden-hot",
     ...qaFlags.map((q) => q.split(":")[0]),
   ].filter(Boolean) as string[];
+  const callbackTask =
+    i.callback_requested && !forceDnc && !["CALLBACK", "BOOKED", "DNC"].includes(key)
+      ? {
+          title: `Callback promised: ${i.callback_requested}`,
+          body: `AI review: the owner asked for a callback ("${i.callback_requested}") but the call was marked ${key}. Set Next Follow Up and call back.`,
+        }
+      : null;
   return {
+    callbackTask,
     oppFields: {
       "AI Temperature": i.lead_temperature,
       "AI Summary": formatIntel(i),

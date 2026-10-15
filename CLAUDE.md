@@ -87,8 +87,10 @@ BatchLeads pull adds Camden, Mercer, Atlantic, Cumberland, Ocean, Burlington, Gl
   lane only, 1 line until counsel signs off on abandonment (3%/30 days, 47 CFR
   64.1200(a)(7)); FL/OK/MD owners or area codes = manual lane, single line.
   Calling policy Mon–Sat 9am–8pm in the owner's zone (mailing state), no Sundays or
-  federal holidays. "This call may be recorded" + caller name + "calling for
-  Sumeet Sancheti with House Sold NJ" in the opening. No brokerage/license line
+  federal holidays. Opening (owner decision 2026-10-15): caller name + "calling
+  from HouseSoldNJ — we're local real estate investors, and our calls are
+  recorded" + property. The recording words are never dropped (all-party-consent
+  answerers). No brokerage/license line
   in caller scripts (owner decision 2026-10-14); Sum discloses license status
   at the consultation and in writing before any contract, and callers never
   deny it if asked. Callers never quote price, offers, commission or listing terms.

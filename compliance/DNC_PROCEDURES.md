@@ -1,6 +1,6 @@
 # Written Do-Not-Call & Outbound Calling Procedures
 
-**Version 1.0 · effective at first caller training (planned 2026-10-12) · owner: Sumeet Sancheti**
+**Version 1.1 · effective at first caller training (planned 2026-10-12) · owner: Sumeet Sancheti**
 Status: in force for all outbound calling; draft for counsel review.
 
 This is the written policy required by 47 C.F.R. § 64.1200(c)(2)(i)(A) and
@@ -104,10 +104,9 @@ rules that differ for them.
    - The cadence is 8 attempts over about 30 days, then 90 days of rest.
    - Every number for a person counts toward that person's limit.
 3. **Opening, every call, before anything else:**
-   > "Hi, is this {first name}? This is {caller} calling for Sumeet Sancheti
-   > with House Sold NJ — he buys houses and land here in New Jersey. This call
-   > may be recorded. I'm calling about {property street} — is that still
-   > yours?"
+   > "Hi, is this {first name}? This is {caller} calling from HouseSoldNJ —
+   > we're local real estate investors, and our calls are recorded. I'm calling
+   > about {property street} — is that still yours?"
 
    This states the caller's name, the person and business the call is for,
    the purpose, and that the call is recorded (47 C.F.R. § 64.1200(d)(4)). If
@@ -115,8 +114,11 @@ rules that differ for them.
    Callers do not name a brokerage (owner decision 2026-10-14). Sumeet
    discloses his license status himself at the consultation and in writing
    before any contract. If an owner asks whether Sumeet is an agent or a
-   realtor, answer truthfully: "Yes, he's a licensed agent, and he also buys
-   directly. He'll walk you through every option." Never deny it.
+   realtor, answer truthfully: "Yes — Sumeet Sancheti, who owns HouseSoldNJ,
+   is a licensed agent. We also buy directly, and he'll walk you through every
+   option." Never deny it. The recording words stay in every opening: some
+   owners answer from all-party-consent states (PA, FL, MD, CA…), where
+   recording without notice is a crime and a civil claim.
 4. **Caller ID.** WAVV must always transmit a caller-ID number we own and
    answer, with the business name where the carrier supports it (47 C.F.R.
    § 64.1601(e)). Never block caller ID. Never spoof another number.
@@ -126,7 +128,7 @@ rules that differ for them.
    - The WAVV voicemail-drop recording slot stays **empty**. In multi-line mode
      WAVV drops any recording automatically.
    - Callers may leave a live voicemail, spoken by the caller: "Hi, this is
-     {caller} calling for Sumeet Sancheti with House Sold NJ, about
+     {caller} calling from HouseSoldNJ, about
      {property street}. You can reach us at
      {number}. Thank you."
 6. **One line.**
@@ -283,6 +285,7 @@ number, and every caller is retrained on it before their next shift.
 | Version | Date | Change |
 |---|---|---|
 | 1.0 | 2026-10-06 | First issue |
+| 1.1 | 2026-10-15 | Opening: "calling from HouseSoldNJ — we're local real estate investors, and our calls are recorded" (owner decision); agent answer names Sumeet as owner |
 
 *This document governs how this business calls people. It summarizes the rules
 we follow; the cited regulations control where they say more.*

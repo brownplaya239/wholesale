@@ -7,6 +7,7 @@
  * The middleware is the ONLY writer of dial state (counters, cadence, phone
  * rotation, lanes, DNC, stage moves). GHL workflows just notify.
  */
+import { site } from "@/config/site";
 import type { Db } from "@/lib/db";
 import { enrichLead } from "@/lib/leads/enrich";
 import { fanOut, reportUrl } from "@/lib/leads/notify";
@@ -14,7 +15,7 @@ import { saveFullLead } from "@/lib/leads/store";
 import { assignWorkflow } from "@/lib/enrich/insights";
 import { extractIntel, planIntel } from "./callIntel";
 import { auditCall, trainedCallers, type Flag } from "./compliance";
-import { dispositionKey, planDisposition, type ContactState, type OppState, type Plan } from "./dispositions";
+import { addBusinessDays, dispositionKey, planDisposition, type ContactState, type OppState, type Plan } from "./dispositions";
 import { ghlFromEnv, type Ghl, type GhlContact } from "./ghl";
 import { PIPELINES, TAGS, type DispositionKey, type PipelineKey } from "./schema";
 import {
@@ -42,6 +43,11 @@ const digits = (v: unknown) => {
 
 export function contactUrl(contactId: string): string {
   return `https://app.gohighlevel.com/v2/location/${process.env.GHL_LOCATION_ID}/contacts/detail/${contactId}`;
+}
+
+/** Admin page with the call's transcript, AI review and flags. */
+export function callUrl(callId: string): string {
+  return `${site.url}/admin/calls/${encodeURIComponent(callId)}`;
 }
 
 async function alert(subject: string, lines: (string | false | null | undefined)[], tag: string): Promise<void> {
@@ -137,6 +143,9 @@ function dims(ctx: Ctx, call: CallRow): Record<string, string> {
     wave: String(f["Wave"] ?? ""),
     lane: String(f["Dial Lane"] ?? ""),
     caller: call.userId ?? "",
+    // For the Slack reports (no GHL round-trip per call when they're built).
+    name: [ctx.contact.firstName, ctx.contact.lastName].filter(Boolean).join(" "),
+    property: String(f["Primary Property"] ?? ""),
   };
 }
 
@@ -361,8 +370,18 @@ export async function processIntel(db: Db, id: string): Promise<string> {
   if (!ctx) return "done_no_crm";
   const { r } = ctx;
   if (ctx.oppId) await ghl!.updateOpportunity(ctx.oppId, { customFields: cf(r.opportunity, ip.oppFields) }).catch(() => {});
-  await ghl!.addNote(ctx.contact.id, ip.note);
+  await ghl!.addNote(ctx.contact.id, `${ip.note}\n\nTranscript: ${callUrl(id)}`);
   await ghl!.addTags(ctx.contact.id, ip.tagsAdd);
+  if (ip.callbackTask) {
+    // The owner asked for a callback the disposition didn't capture: a dated
+    // task for Sumeet, so it can't fall through the cracks.
+    await ghl!.addTask(ctx.contact.id, {
+      title: ip.callbackTask.title,
+      body: `${ip.callbackTask.body}\n${callUrl(id)}`,
+      dueDate: addBusinessDays(new Date(), 1).toISOString(),
+      ...(ownerUser() ? { assignedTo: ownerUser() } : {}),
+    }).catch((e) => console.error(`ACQ INTEL TASK FAILURE call=${id} ${String(e)}`));
+  }
   if (ip.forceDnc) {
     // Same effects as a DNC disposition, minus the attempt counters.
     const dnc = planDisposition("DNC", { at: new Date(), human: true, seconds: call.seconds ?? 0, dialed: digits(call.phone), userId: call.userId }, contactState(ctx), ctx.opp);

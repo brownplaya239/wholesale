@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db";
 import { enrichLead } from "@/lib/leads/enrich";
 import { ingestSr1aFile, sr1aFileName } from "@/lib/sr1a";
 import { drain, reconcile } from "@/lib/acq/processor";
+import { runDigest } from "@/lib/acq/digestRun";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -11,7 +12,9 @@ export const maxDuration = 300;
  * Daily (vercel.json cron): refresh the state's deed-sales files when they
  * change, retry enrichments that failed or never finished, and reconcile the
  * dialer: pull the last day of WAVV calls (catches lost webhooks) and finish
- * any disposition / transcript / AI review left pending.
+ * any disposition / transcript / AI review left pending. Then posts the
+ * morning agenda (callbacks due, yesterday's leads) to the daily-summary
+ * Slack channel — skipped on Sundays.
  * Vercel sends `Authorization: Bearer $CRON_SECRET`.
  */
 export async function GET(req: NextRequest) {
@@ -35,5 +38,6 @@ export async function GET(req: NextRequest) {
   const retried: Record<string, string> = {};
   for (const { id } of stuck) retried[id] = await enrichLead(id, { notify: true, reason: "retry" });
   const acq = { reconcile: await reconcile(db).catch((e) => ({ error: String(e).slice(0, 200) })), drained: await drain(db, 25).catch((e) => ({ error: String(e).slice(0, 200) })) };
-  return NextResponse.json({ ok: true, ingest, retried, acq });
+  const morning = await runDigest(db, "morning", { skipSync: true }).catch((e) => ({ error: String(e).slice(0, 200) }));
+  return NextResponse.json({ ok: true, ingest, retried, acq, morning });
 }
