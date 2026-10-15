@@ -72,6 +72,8 @@ export type ContactState = {
   invalidPhones: string[];
   propertyCount: number;
   primaryPropertyId?: string | null;
+  /** lane "suppressed" or the dnc tag: a DNC'd contact must never be re-queued */
+  suppressed?: boolean;
 };
 
 export type OppState = {
@@ -171,6 +173,16 @@ export function planDisposition(key: DispositionKey, call: CallFacts, c: Contact
     hotReport: false,
     notes: [],
   };
+  // A call reaching a contact that is already suppressed (e.g. a dial placed
+  // before the DNC but processed after it) only bumps the counters. Never
+  // re-queue, recycle, re-stage or re-alert a DNC'd contact.
+  if (c.suppressed && key !== "DNC") {
+    plan.contactFields = { "Call Attempts": attempts, "Last Call Date": ymd(now) };
+    plan.conversation = false;
+    plan.opp = null;
+    plan.notes.push(`Call logged on a suppressed contact ("${label}"); no dial-state change.`);
+    return plan;
+  }
   const canAuto = opp ? automatable(opp) : false;
   const stage = (role: StageRole) => {
     if (opp && plan.opp && canAuto) {

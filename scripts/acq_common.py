@@ -97,8 +97,8 @@ ALIASES: dict[str, list[str]] = {
                          "totalopenloanbalance", "openloanbalance"],
     "equity_pct": ["equitypercent", "estimatedequitypercent", "equitypct",
                    "equitypercentage", "equity"],
-    "equity_amount": ["estimatedequity", "equityamount", "equityvalue", "estimatedequityamount"],
-    "ltv": ["ltv", "loantovalue", "estimatedltv", "loantovalueratio"],
+    "equity_amount": ["estimatedequity", "equityamount", "equityvalue", "estimatedequityamount", "equitycurrentestimatedbalance"],
+    "ltv": ["ltv", "loantovalue", "estimatedltv", "loantovalueratio", "ltvcurrentestimatedcombined"],
     "last_sale_date": ["lastsaledate", "saledate", "lastsolddate", "lasttransferdate",
                        "lastsalerecordingdate", "lastmarketsaledate"],
     "last_sale_price": ["lastsaleprice", "saleprice", "lastsoldprice", "lastsaleamount",
@@ -131,8 +131,15 @@ ALIASES: dict[str, list[str]] = {
     "owner_first": ["firstname", "ownerfirstname", "owner1firstname"],
     "owner_last": ["lastname", "ownerlastname", "owner1lastname"],
     "owner2_full": ["owner2name", "owner2fullname", "owner2"],
+    "owner2_first": ["owner2firstname"],
+    "owner2_last": ["owner2lastname"],
+    "opt_out": ["optout", "optedout", "donotcontact"],
+    # BatchLeads: the recorded document, not a flag. Resolved documents
+    # (rescission, dismissal/release) mean NOT in foreclosure.
+    "foreclosure_doc": ["foreclosuredocumenttype", "foreclosuredoctype"],
+    "foreclosure_default_date": ["foreclosureloandefaultdate", "loandefaultdate", "defaultdate"],
     "mailing_address": ["mailingaddress", "owneraddress", "mailaddress",
-                        "mailingstreetaddress", "ownermailingaddress", "mailingstreet"],
+                        "mailingstreetaddress", "ownermailingaddress", "mailingstreet", "mailingline1new", "mailingline1", "mailingaddressline1", "mailingaddress1"],
     "mailing_city": ["mailingcity", "ownercity", "mailcity", "ownermailingcity"],
     "mailing_state": ["mailingstate", "ownerstate", "mailstate", "ownermailingstate"],
     "mailing_zip": ["mailingzip", "mailingzipcode", "ownerzip", "ownerzipcode", "mailzip",
@@ -182,6 +189,20 @@ def map_columns(columns) -> dict:
     return {"fields": fields, "phones": phones, "emails": emails, "unmapped": unmapped}
 
 
+# A recorded foreclosure document that means the case is live vs. resolved.
+FORECLOSURE_ACTIVE = re.compile(r"lis pendens|notice of default|trustee'?s sale|notice of sale|sheriff", re.I)
+FORECLOSURE_RESOLVED = re.compile(r"rescission|dismissal|cancell?ation|release|satisf", re.I)
+
+
+def foreclosure_active(doc) -> bool | None:
+    if doc is None or (isinstance(doc, float) and pd.isna(doc)) or not str(doc).strip():
+        return None
+    d = str(doc)
+    if FORECLOSURE_RESOLVED.search(d):
+        return False
+    return True if FORECLOSURE_ACTIVE.search(d) else None
+
+
 # ------------------------------------------------------------- normalizers --
 _TRUE = {"y", "yes", "true", "t", "1", "x"}
 _FALSE = {"n", "no", "false", "f", "0", ""}
@@ -213,7 +234,9 @@ def to_date(v):
     if v is None or (isinstance(v, float) and pd.isna(v)) or str(v).strip() == "":
         return None
     d = pd.to_datetime(str(v), errors="coerce")
-    return None if pd.isna(d) else d.date()
+    if pd.isna(d) or (d.year == 1970 and d.month == 1 and d.day == 1):
+        return None  # vendors write the Unix epoch for "no date"
+    return d.date()
 
 
 def normalize_phone(v) -> str | None:

@@ -146,7 +146,11 @@ def eligible(owners: pd.DataFrame, led: pd.DataFrame, asset: str | None,
     return e[~stale]
 
 
-def select_wave(e: pd.DataFrame, size: int, greedy: bool) -> pd.DataFrame:
+def select_wave(e: pd.DataFrame, size: int, greedy: bool, lowest: bool = False) -> pd.DataFrame:
+    if lowest:
+        # Ramp-up / practice wave: new callers learn on the least promising
+        # leads first, keeping the best for when they are skilled.
+        return e.sort_values("lead_score", ascending=True).head(size)
     e = e.sort_values("lead_score", ascending=False)
     if greedy:
         return e.head(size)
@@ -219,10 +223,10 @@ def cmd_wave(args) -> None:
     today = as_of(args)
     e = eligible(owners, led, args.asset, args.min_scrub_days, today)
     size = args.size or capacity(args.callers, args.hours, args.dials_per_hour, args.attempts)["fresh_per_week"]
-    w = select_wave(e, size, args.greedy)
+    w = select_wave(e, size, args.greedy, getattr(args, "lowest", False))
     wave = next_wave_id(led)
     print(f"{wave}: {len(w):,} owners selected of {len(e):,} eligible "
-          f"({'greedy' if args.greedy else 'stratified county x cohort'})")
+          f"({'lowest scores first (practice)' if getattr(args, 'lowest', False) else 'greedy' if args.greedy else 'stratified county x cohort'})")
     if len(w):
         print(w.groupby(["asset_class", "dial_lane"]).size().to_string())
         print("\nBy county:\n" + w["primary_county"].value_counts().to_string())
@@ -380,6 +384,7 @@ def main() -> None:
     p.add_argument("--size", type=int); p.add_argument("--asset", choices=["residential", "land"])
     p.add_argument("--min-scrub-days", type=int, default=21)
     p.add_argument("--greedy", action="store_true"); p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--lowest", action="store_true", help="lowest scores first (ramp-up practice wave)")
     p = sub.add_parser("scrub-export"); p.add_argument("--days-left", type=int, default=10)
     p.add_argument("--as-of")
     p = sub.add_parser("scrub-apply"); p.add_argument("file")

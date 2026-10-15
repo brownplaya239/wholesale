@@ -79,6 +79,10 @@ BatchLeads pull adds Camden, Mercer, Atlantic, Cumberland, Ocean, Burlington, Gl
   voice inside TCPA §227(b): $500–$1,500/call, uncapped. WAVV auto-drops a recorded
   voicemail in multi-line mode: never upload one. Cold GHL contacts carry SMS DND +
   `no-sms`.
+- Registry SAN registered by Sum 2026-10-14 (first 5 area codes). Owner decision
+  2026-10-14: the October BatchLeads pull uses the vendor's DNC + litigator flags
+  as the scrub (`09 build --trust-vendor-scrub`, flags dated 2026-10-14); re-scrub
+  under Sum's SAN before any wave released after ~2026-11-13.
 - Dialing (WAVV): DNC+litigator scrub ≤31 days under Sum's own registry SAN, power
   lane only, 1 line until counsel signs off on abandonment (3%/30 days, 47 CFR
   64.1200(a)(7)); FL/OK/MD owners or area codes = manual lane, single line.
