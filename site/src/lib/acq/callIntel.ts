@@ -175,6 +175,7 @@ export type IntelPlan = {
   alerts: string[];
   qaFlags: string[];
   note: string;
+  callbackTask: { title: string; body: string } | null;
 };
 
 const LIVE_OWNER = new Set(["owner", "co_owner_or_decision_maker", "relative_or_heir"]);
@@ -211,7 +212,15 @@ export function planIntel(i: CallIntel, key: DispositionKey, callId: string): In
     hidden && "hidden-hot",
     ...qaFlags.map((q) => q.split(":")[0]),
   ].filter(Boolean) as string[];
+  const callbackTask =
+    i.callback_requested && !forceDnc && !["CALLBACK", "BOOKED", "DNC"].includes(key)
+      ? {
+          title: `Callback promised: ${i.callback_requested}`,
+          body: `AI review: the owner asked for a callback ("${i.callback_requested}") but the call was marked ${key}. Set Next Follow Up and call back.`,
+        }
+      : null;
   return {
+    callbackTask,
     oppFields: {
       "AI Temperature": i.lead_temperature,
       "AI Summary": formatIntel(i),

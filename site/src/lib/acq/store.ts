@@ -259,10 +259,10 @@ export async function listSuppression(db: Db): Promise<{ createdAt: string; kind
   }));
 }
 
-export async function recentCalls(db: Db, days: number, limit = 500): Promise<CallRow[]> {
+export async function recentCalls(db: Db, days: number, limit = 500, opts: { plan?: boolean } = {}): Promise<CallRow[]> {
   const rows = await db.q<Row>(
     `SELECT id, direction, phone, contact_id, user_id, campaign_id, started_at, ended_at, seconds, outcome, human,
-            disposition, disposition_key, note, dims, conversation, NULL::jsonb AS plan, flags, ended_status,
+            disposition, disposition_key, note, dims, conversation, ${opts.plan ? "plan" : "NULL::jsonb AS plan"}, flags, ended_status,
             ended_attempts, ended_error, recorded, transcript_status, transcript_attempts, NULL AS transcript,
             NULL AS wavv_summary, intel, intel_status, intel_error
        FROM acq_calls WHERE COALESCE(started_at, created_at) > now() - ($1::text || ' days')::interval

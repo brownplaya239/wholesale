@@ -26,6 +26,7 @@ import {
   type PipelineKey,
 } from "../src/lib/acq/schema.ts";
 import { breakdown, funnel, weeklySample } from "../src/lib/acq/metrics.ts";
+import { eodReport, etDate, morningDigest, prevCallingDay, callerNamer, type DigestCtx } from "../src/lib/acq/digest.ts";
 import type { CallRow } from "../src/lib/acq/store.ts";
 import { firstTouch } from "../src/lib/enrich/insights.ts";
 
@@ -622,4 +623,73 @@ test("end to end: signed WAVV call.ended -> call log -> GHL disposition applied;
     globalThis.fetch = realFetch;
     await closeDb();
   }
+});
+
+// --------------------------------------------------------------- digest --
+const X: DigestCtx = { contactUrl: (id) => `https://ghl/${id}`, callUrl: (id) => `https://site/call/${id}`, callerName: callerNamer("A=Alex,K=Kate") };
+const at = (iso: string) => ({ startedAt: iso, endedAt: iso });
+const reviewed = (summary: string, extra: Record<string, unknown> = {}) => ({
+  summary, callback_requested: null, lead_temperature: "warm",
+  qa: { opening: 2, tone: 3, discovery: 2, listening: 3, qualification: 2, objection_handling: 3, control: 3, closing: 2, notes_accuracy: "accurate", coaching_note: "ask motivation first" },
+  plan: { alerts: [], qaFlags: ["no recording disclosure"] }, ...extra,
+});
+
+test("digest: ET day boundaries and the calling day before a Monday", () => {
+  assert.equal(etDate("2026-10-16T01:30:00Z"), "2026-10-15", "9:30 pm EDT is still the 15th");
+  assert.equal(prevCallingDay("2026-10-19"), "2026-10-17", "Monday -> Saturday");
+  assert.equal(prevCallingDay("2026-10-16"), "2026-10-15");
+  assert.equal(callerNamer("A=Alex")("A"), "Alex");
+  assert.match(callerNamer("")("zzz123456789"), /^caller zzz12345/);
+});
+
+test("digest: EOD report covers the day's funnel, leads, callbacks, compliance, coaching and every-call gaps", () => {
+  const day = "2026-10-15";
+  const calls = [
+    row({ id: "h1", ...at("2026-10-15T15:00:00Z"), userId: "A", contactId: "c1", human: true, seconds: 240, conversation: true, dispositionKey: "HOT",
+      recorded: true, transcriptStatus: "ready", intelStatus: "done", dims: { county: "OCEAN", cohort: "tax_delinquent", name: "Paul Limburg", property: "306 MEADOWBROOK RD" },
+      intel: reviewed("Divorce, wants out in 60 days.") }),
+    row({ id: "cb", ...at("2026-10-15T16:00:00Z"), userId: "K", contactId: "c2", human: true, seconds: 90, conversation: true, dispositionKey: "CALLBACK",
+      plan: { tasks: [{ title: "Callback", due: "2026-10-17T14:00:00.000Z" }] }, recorded: true, transcriptStatus: "pending", dims: { county: "MERCER", cohort: "tax_delinquent", name: "Jane Roe" } }),
+    row({ id: "v1", ...at("2026-10-15T17:00:00Z"), userId: "K", contactId: "c3", dispositionKey: "NO_ANSWER", flags: [{ severity: "violation", code: "dialed_suppressed_contact", detail: "contact is DNC" }] }),
+    row({ id: "m1", ...at("2026-10-15T18:00:00Z"), userId: "A", contactId: null, dispositionKey: "NO_ANSWER" }),
+    row({ id: "old", ...at("2026-10-14T15:00:00Z"), userId: "A", contactId: "c9", dispositionKey: "HOT" }),
+  ];
+  const r = eodReport(calls, day, X, { recovered: 2 });
+  assert.match(r, /End-of-day report — Thu, Oct 15/);
+  assert.match(r, /\*4\* dials/, "only the ET day's outbound calls");
+  assert.match(r, /🔥 Hot 1 /);
+  assert.match(r, /\*Alex\*: 2 dials/);
+  assert.match(r, /🔥 \*Paul Limburg\* — 306 MEADOWBROOK RD <https:\/\/ghl\/c1\|GHL> · Alex · Divorce, wants out in 60 days\./);
+  assert.match(r, /\*Jane Roe\*.*due Sat, Oct 17/);
+  assert.match(r, /⚠️ dialed_suppressed_contact/);
+  assert.match(r, /tip: ask motivation first/);
+  assert.match(r, /no recording disclosure/);
+  assert.match(r, /🔁 2 call\(s\) recovered/);
+  assert.match(r, /1 call\(s\) with no GHL contact/);
+  assert.match(r, /1 recorded call\(s\) without a transcript/);
+  assert.ok(!/c9/.test(r), "yesterday's call excluded");
+  assert.match(eodReport([], day, X), /No outbound calls today/);
+});
+
+test("digest: morning agenda lists due and overdue callbacks; a later call clears one", () => {
+  const cb = (id: string, contactId: string, started: string, due: string) =>
+    row({ id, ...at(started), userId: "K", contactId, dispositionKey: "CALLBACK", plan: { tasks: [{ title: "Callback", due }] }, dims: { name: `Owner ${id}` } });
+  const calls = [
+    cb("d1", "c1", "2026-10-15T15:00:00Z", "2026-10-16T14:00:00Z"),
+    cb("o1", "c2", "2026-10-13T15:00:00Z", "2026-10-14T14:00:00Z"),
+    cb("x1", "c3", "2026-10-13T15:00:00Z", "2026-10-14T14:00:00Z"),
+    row({ id: "x2", ...at("2026-10-15T15:30:00Z"), contactId: "c3", dispositionKey: "NOT_INTERESTED" }),
+    row({ id: "w1", ...at("2026-10-15T16:00:00Z"), userId: "A", contactId: "c4", dispositionKey: "WARM", conversation: true, dims: { name: "Warm Owner" }, intel: reviewed("Open to selling next spring.") }),
+  ];
+  const m = morningDigest(calls, "2026-10-16", X);
+  assert.match(m, /Callbacks due today \(1\)[\s\S]*Owner d1/);
+  assert.match(m, /Overdue callbacks \(1\)[\s\S]*Owner o1.*was due Wed, Oct 14/);
+  assert.ok(!/Owner x1/.test(m), "handled by a later call");
+  assert.match(m, /🌤 \*Warm Owner\*.*Open to selling next spring/);
+});
+
+test("call intel: a callback the caller didn't disposition becomes a task", () => {
+  const i = intel({ callback_requested: "Tuesday after 5" });
+  assert.equal(planIntel(i, "NOT_INTERESTED", "c1").callbackTask?.title, "Callback promised: Tuesday after 5");
+  assert.equal(planIntel(i, "CALLBACK", "c1").callbackTask, null, "already captured by the disposition");
 });
