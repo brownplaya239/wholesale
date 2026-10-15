@@ -342,7 +342,7 @@ What `build` enforces:
 | `GHL_COLD_SMS_DND` | `off` only if GHL rejects `dndSettings` on import (default on) |
 | `ACQ_TRAINED_CALLERS` | comma list of WAVV user ids with a signed training acknowledgement; any other caller's call is flagged as a violation |
 | `DATABASE_URL`, `CRON_SECRET`, `RESEND_API_KEY` / `SLACK_WEBHOOK_URL` | existing: call log, daily reconcile, alerts |
-| `SLACK_DIGEST_WEBHOOK_URL` | incoming webhook for the daily-summary channel: ☀️ morning agenda (~8:30 am ET) and 📊 end-of-day report (~9:15 pm EDT / 8:15 pm EST), Mon–Sat. Falls back to `SLACK_WEBHOOK_URL`. Manual run / preview: `GET /api/cron/digest/eod?secret=$CRON_SECRET&dry=1[&date=YYYY-MM-DD]` |
+| `SLACK_DIGEST_WEBHOOK_URL` | incoming webhook for the daily-summary channel: ☀️ morning agenda (rides the daily cron, ~5:15 am EDT / 4:15 am EST) and 📊 end-of-day report (~9:15 pm EDT / 8:15 pm EST), Mon–Sat. Two crons total (Hobby limit). Falls back to `SLACK_WEBHOOK_URL`. Manual run / preview: `GET /api/cron/digest/eod?secret=$CRON_SECRET&dry=1[&date=YYYY-MM-DD]` |
 | `ACQ_CALLER_NAMES` | `wavvUserId=Alex,wavvUserId=Kate` — names in the Slack reports and call pages (ids otherwise) |
 
 ## 7. What happens after every disposition (implemented in `dispositions.ts`)
