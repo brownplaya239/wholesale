@@ -515,7 +515,7 @@ test("wave push: contact (no tags in upsert), property + association, opportunit
 test("call brief: opener with names filled, property facts, no dollar figures", async () => {
   const b = callBrief(waveRecord());
   assert.match(b, /^CALL BRIEF — 10 Oak St/);
-  assert.match(b, /This call may be recorded\. I'm calling about 10 Oak St/);
+  assert.match(b, /calling from HouseSoldNJ — we're local real estate investors, and our calls are recorded\. I'm calling about 10 Oak St/);
   assert.ok(!/\$|300,?000|equity/i.test(b), "no value/equity numbers for callers to quote");
   assert.ok(!/tax/i.test(b.split("NEVER:")[0]), "taxes only appear in the never-list");
   resetResolveCache();

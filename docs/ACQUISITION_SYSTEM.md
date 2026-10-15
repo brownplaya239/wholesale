@@ -424,14 +424,15 @@ Policy breaches (9am–8pm, Sundays, federal holidays) and dropped connects show
 
 ## 10. Caller script (compliance lines are not optional)
 
-> "Hi, is this {first name}? This is {caller} calling for Sumeet Sancheti with
-> House Sold NJ — he buys houses and land here in New Jersey. **This call may be
-> recorded.** I'm calling about {property street} — is that still yours?"
+> "Hi, is this {first name}? This is {caller} calling from HouseSoldNJ — we're
+> local real estate investors, **and our calls are recorded.** I'm calling about
+> {property street} — is that still yours?"
 
 - **No brokerage in the opening** (owner decision 2026-10-14). Sumeet discloses
   his license status at the consultation and in writing before any contract.
-  Asked "is he an agent?": "Yes, he's a licensed agent, and he also buys
-  directly." Never deny it.
+  Asked "are you agents?": "Yes — Sumeet Sancheti, who owns HouseSoldNJ, is a
+  licensed agent. We also buy directly." Never deny it. (Opening per owner
+  decision 2026-10-15; the recording words are kept on purpose.)
 
 - **Confirm the owner first.** If it's someone else: "Who would I speak with
   about the property?" If "he passed away": slow down, offer condolences, and

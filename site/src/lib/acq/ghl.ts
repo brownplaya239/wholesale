@@ -166,6 +166,9 @@ export class Ghl {
   addNote(id: string, body: string) {
     return this.req("POST", `/contacts/${id}/notes`, { body: { body } });
   }
+  updateNote(contactId: string, noteId: string, body: string) {
+    return this.req("PUT", `/contacts/${contactId}/notes/${noteId}`, { body: { body } });
+  }
   async listNotes(id: string): Promise<{ id: string; body?: string }[]> {
     const r = await this.req<{ notes?: { id: string; body?: string }[] }>("GET", `/contacts/${id}/notes`);
     return r.notes ?? [];

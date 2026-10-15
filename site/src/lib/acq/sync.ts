@@ -500,7 +500,7 @@ export function callBrief(rec: WaveRecord): string {
   const lines = [
     `${CALL_BRIEF_MARKER} — ${where}`,
     "",
-    `OPENER: "${greet} This is ___ calling for Sumeet Sancheti with House Sold NJ — he buys houses and land here in New Jersey. This call may be recorded. I'm calling about ${street} — is that still yours?"`,
+    `OPENER: "${greet} This is ___ calling from HouseSoldNJ — we're local real estate investors, and our calls are recorded. I'm calling about ${street} — is that still yours?"`,
     "",
   ];
   if (p) {
@@ -533,12 +533,21 @@ export function callBrief(rec: WaveRecord): string {
   return lines.join("\n");
 }
 
-/** Adds the call brief unless the contact already has one (safe to re-run). */
-export async function ensureCallBrief(ghl: Ghl, contactId: string, rec: WaveRecord): Promise<boolean> {
+/**
+ * Adds the call brief unless the contact already has one (safe to re-run).
+ * refresh: rewrite an existing brief whose text is out of date (script change).
+ */
+export async function ensureCallBrief(ghl: Ghl, contactId: string, rec: WaveRecord, opts: { refresh?: boolean } = {}): Promise<"added" | "updated" | "kept"> {
+  const body = callBrief(rec);
   const notes = await ghl.listNotes(contactId);
-  if (notes.some((n) => (n.body ?? "").replace(/<[^>]+>/g, "").trimStart().startsWith(CALL_BRIEF_MARKER))) return false;
-  await ghl.addNote(contactId, callBrief(rec));
-  return true;
+  const mine = notes.filter((n) => (n.body ?? "").replace(/<[^>]+>/g, "").trimStart().startsWith(CALL_BRIEF_MARKER));
+  if (!mine.length) {
+    await ghl.addNote(contactId, body);
+    return "added";
+  }
+  if (!opts.refresh || mine.every((n) => n.body === body)) return "kept";
+  for (const n of mine) if (n.body !== body) await ghl.updateNote(contactId, n.id, body);
+  return "updated";
 }
 
 export async function pushOwner(ghl: Ghl, r: Resolved, rec: WaveRecord, ids: IdMap, opts: { coldSmsDnd: boolean }): Promise<PushResult> {
