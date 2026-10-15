@@ -15,7 +15,7 @@ import { auditCall, callWindowFlags, isFederalHoliday, trainedCallers } from "..
 import { matchWavvSignature, verifyWavvSignature } from "../src/lib/acq/wavv.ts";
 import { formatIntel, planIntel, type CallIntel } from "../src/lib/acq/callIntel.ts";
 import { Ghl } from "../src/lib/acq/ghl.ts";
-import { callBrief, cf, matchFields, matchStages, pushOwner, resetResolveCache, resolve, toFieldValue, type IdMap, type WaveRecord } from "../src/lib/acq/sync.ts";
+import { callBrief, queueTag, cf, matchFields, matchStages, pushOwner, resetResolveCache, resolve, toFieldValue, type IdMap, type WaveRecord } from "../src/lib/acq/sync.ts";
 import {
   CONTACT_FIELDS,
   DISPOSITIONS,
@@ -692,4 +692,13 @@ test("call intel: a callback the caller didn't disposition becomes a task", () =
   const i = intel({ callback_requested: "Tuesday after 5" });
   assert.equal(planIntel(i, "NOT_INTERESTED", "c1").callbackTask?.title, "Callback promised: Tuesday after 5");
   assert.equal(planIntel(i, "CALLBACK", "c1").callbackTask, null, "already captured by the disposition");
+});
+
+test("queue tag: stable per owner, split across callers, off when unset", () => {
+  assert.equal(queueTag("own1", ""), null);
+  const env = "q:alex,q:kate";
+  assert.equal(queueTag("own1", env), queueTag("own1", env));
+  const counts = { "q:alex": 0, "q:kate": 0 } as Record<string, number>;
+  for (let i = 0; i < 1000; i++) counts[queueTag(`owner-${i}`, env)!]++;
+  assert.ok(counts["q:alex"] > 400 && counts["q:kate"] > 400, JSON.stringify(counts));
 });
