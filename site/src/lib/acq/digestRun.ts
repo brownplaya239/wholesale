@@ -19,7 +19,10 @@ export async function runDigest(
   const day = opts.day ?? etDate(new Date());
   const sunday = new Date(`${day}T12:00:00Z`).getUTCDay() === 0;
   // No Sunday dialing: no Sunday agenda, and no Sunday EOD unless a day was asked for.
-  if (sunday && !opts.day) return { kind, day, skipped: "sunday" };
+  if (sunday && !opts.day) {
+    console.info(`ACQ DIGEST kind=${kind} day=${day} skipped=sunday`);
+    return { kind, day, skipped: "sunday" };
+  }
 
   let recovered = 0;
   const sync: Record<string, unknown> = {};
@@ -33,6 +36,8 @@ export async function runDigest(
   const calls = await recentCalls(db, kind === "eod" ? 3 : 40, 5000, { plan: true });
   const text = kind === "eod" ? eodReport(calls, day, x, { recovered }) : morningDigest(calls, day, x);
   const posted = opts.dry ? null : await postSlack(text);
+  // Always leave a trace: a silent success and a missing webhook look the same otherwise.
+  console.info(`ACQ DIGEST kind=${kind} day=${day} calls=${calls.length} posted=${posted ? `${posted.ok} ${posted.detail}` : "dry-run"}`);
   return { kind, day, posted, ...sync, ...(opts.dry ? { text } : {}) };
 }
 
