@@ -27,10 +27,21 @@ async function sendWebhook(payload: object): Promise<Delivery | null> {
   }
 }
 
-async function sendEmail(subject: string, text: string, html?: string): Promise<Delivery | null> {
+/**
+ * LEAD_ALERT_TO gets every email (lead alerts, property reports, compliance
+ * and AI call-review alerts). LEAD_ALERT_TEAM_TO (callers) is added only to
+ * emails flagged `team`: new web leads and Hot / Booked call alerts — never
+ * property reports (values, offer math) or compliance/QA alerts.
+ */
+export function emailRecipients(team: boolean, env: { to?: string; team?: string } = { to: process.env.LEAD_ALERT_TO, team: process.env.LEAD_ALERT_TEAM_TO }): string[] {
+  const split = (s?: string) => (s ?? "").split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
+  return [...new Set([...split(env.to), ...(team ? split(env.team) : [])])];
+}
+
+async function sendEmail(subject: string, text: string, html?: string, team = false): Promise<Delivery | null> {
   const key = process.env.RESEND_API_KEY;
-  const to = process.env.LEAD_ALERT_TO;
-  if (!key || !to) return null;
+  const to = emailRecipients(team);
+  if (!key || !to.length) return null;
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -40,7 +51,7 @@ async function sendEmail(subject: string, text: string, html?: string): Promise<
       },
       body: JSON.stringify({
         from: process.env.LEAD_ALERT_FROM || "leads@housesoldnj.com",
-        to: to.split(",").map((s) => s.trim()),
+        to,
         subject,
         text,
         ...(html ? { html } : {}),
@@ -75,8 +86,8 @@ async function sendSlack(text: string): Promise<Delivery | null> {
 }
 
 /** Sends everywhere configured; `results` is empty when nothing is configured. */
-export async function fanOut(subject: string, text: string, payload: object, tag: string, html?: string): Promise<Delivery[]> {
-  const results = (await Promise.all([sendWebhook(payload), sendEmail(subject, text, html), sendSlack(text)])).filter(
+export async function fanOut(subject: string, text: string, payload: object, tag: string, html?: string, opts: { team?: boolean } = {}): Promise<Delivery[]> {
+  const results = (await Promise.all([sendWebhook(payload), sendEmail(subject, text, html, opts.team), sendSlack(text)])).filter(
     (r): r is Delivery => r !== null
   );
   for (const f of results.filter((r) => !r.ok)) {

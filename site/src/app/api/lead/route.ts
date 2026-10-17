@@ -174,7 +174,7 @@ export async function POST(req: NextRequest) {
   }
 
   const [results, ghlResult] = await Promise.all([
-    fanOut(subject, text, payload, `leadId=${leadId} stage=full`),
+    fanOut(subject, text, payload, `leadId=${leadId} stage=full`, undefined, { team: true }),
     deliverToGhl({ leadId, name, phone, address, reportUrl: persisted ? reportUrl(leadId) : undefined }),
   ]);
   if (ghlResult) results.push(ghlResult);

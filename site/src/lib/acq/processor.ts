@@ -51,9 +51,9 @@ export function callUrl(callId: string): string {
   return `${site.url}/admin/calls/${encodeURIComponent(callId)}`;
 }
 
-async function alert(subject: string, lines: (string | false | null | undefined)[], tag: string): Promise<void> {
+async function alert(subject: string, lines: (string | false | null | undefined)[], tag: string, opts: { team?: boolean } = {}): Promise<void> {
   const text = lines.filter(Boolean).join("\n");
-  await fanOut(subject, text, { stage: "acq_alert", subject, text }, tag).catch((e) => console.error(`ACQ ALERT FAILURE ${String(e)}`));
+  await fanOut(subject, text, { stage: "acq_alert", subject, text }, tag, undefined, opts).catch((e) => console.error(`ACQ ALERT FAILURE ${String(e)}`));
 }
 
 // ------------------------------------------------------------ webhooks --
@@ -286,7 +286,7 @@ export async function processEnded(db: Db, id: string): Promise<string> {
         call.note && `Caller note: ${call.note}`,
         `Caller: ${call.userId ?? "?"} · ${call.seconds ?? 0}s`,
         contactUrl(ctx.contact.id),
-      ], `call=${id} notify`);
+      ], `call=${id} notify`, { team: plan.notify.level === "hot" || plan.notify.level === "booked" });
     }
     if (plan.hotReport) await hotLeadReport(db, ctx, oppId, id).catch((e) => console.error(`HOT REPORT FAILURE call=${id} ${String(e)}`));
     return "done";
