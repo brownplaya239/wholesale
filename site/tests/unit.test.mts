@@ -628,3 +628,11 @@ test("photo findings drive the distress level; unconfirmed ones don't", async ()
   assert.ok(e.html.includes("(unconfirmed)"));
   assert.match(e.text, /DISTRESS: HIGH/);
 });
+
+test("alert recipients: team list only on team-flagged emails, deduped, owner list always", async () => {
+  const { emailRecipients } = await import("../src/lib/leads/notify.ts");
+  const env = { to: "sum@housesoldnj.com, sangita@housesoldnj.com", team: "alex@housesoldnj.com,kate@housesoldnj.com,SUM@housesoldnj.com" };
+  assert.deepEqual(emailRecipients(false, env), ["sum@housesoldnj.com", "sangita@housesoldnj.com"]);
+  assert.deepEqual(emailRecipients(true, env), ["sum@housesoldnj.com", "sangita@housesoldnj.com", "alex@housesoldnj.com", "kate@housesoldnj.com"]);
+  assert.deepEqual(emailRecipients(true, { to: "", team: "" }), []);
+});
