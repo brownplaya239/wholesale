@@ -344,6 +344,7 @@ export async function processTranscript(db: Db, id: string): Promise<string> {
     await setTranscript(db, id, { status: "ready", transcript: t.transcript, summary: t.summary });
     return processIntel(db, id);
   } catch (err) {
+    console.error(`ACQ TRANSCRIPT FAILURE call=${id} attempt=${call.transcriptAttempts + 1} ${String(err).slice(0, 200)}`);
     await setTranscript(db, id, { status: call.transcriptAttempts >= 14 ? "failed" : "pending" });
     return `error: ${String(err).slice(0, 100)}`;
   }
@@ -372,6 +373,7 @@ export async function processIntel(db: Db, id: string): Promise<string> {
   });
   if (!res.ok) {
     await setIntel(db, id, { status: "failed", error: res.error });
+    console.error(`ACQ INTEL FAILURE call=${id} ${res.error}`);
     return "failed";
   }
   const ip = planIntel(res.intel, key, id);
