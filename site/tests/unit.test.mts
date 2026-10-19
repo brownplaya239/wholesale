@@ -635,4 +635,10 @@ test("alert recipients: team list only on team-flagged emails, deduped, owner li
   assert.deepEqual(emailRecipients(false, env), ["sum@housesoldnj.com", "sangita@housesoldnj.com"]);
   assert.deepEqual(emailRecipients(true, env), ["sum@housesoldnj.com", "sangita@housesoldnj.com", "alex@housesoldnj.com", "kate@housesoldnj.com"]);
   assert.deepEqual(emailRecipients(true, { to: "", team: "" }), []);
+  // Pasted-list formats that made Resend 422 every alert (2026-10-19).
+  assert.deepEqual(
+    emailRecipients(false, { to: '"Sum <Sum@housesoldnj.com>; sangita@housesoldnj.com\n kate@housesoldnj.com  alex@housesoldnj.com,"', team: "" }),
+    ["sum@housesoldnj.com", "sangita@housesoldnj.com", "kate@housesoldnj.com", "alex@housesoldnj.com"],
+  );
+  assert.deepEqual(emailRecipients(false, { to: "not-an-email, ", team: "" }), []);
 });
