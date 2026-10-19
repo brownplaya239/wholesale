@@ -11,7 +11,7 @@
  *    that in its UI, so an API move re-checks. Missing fields -> the card
  *    goes to Contacted + qa:missing-fields + a 10-minute task for the caller.
  *    A hot seller still alerts Sum immediately — paperwork never delays money.
- *  - Cadence: ≤1 attempt per contact per day (inside every state's 3-per-24h
+ *  - Cadence: ≤1 attempt per contact per day (a WAVV double dial = one attempt, max 2 dials/day) (inside every state's 3-per-24h
  *    cap), gaps 1,1,2,3,7,7,9 days -> 8 attempts over ~30 days, then the
  *    contact recycles for 90 days. Sundays roll to Monday.
  */

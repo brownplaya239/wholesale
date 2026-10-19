@@ -710,7 +710,10 @@ test("one attempt per day: a same-day redial keeps the attempt count and is flag
   const next = planDisposition("NO_ANSWER", { at: TUE, human: false, seconds: 20, dialed: "8562221111" }, c, null);
   assert.equal(next.contactFields["Call Attempts"], 2);
   const base = { at: TUE, direction: "outbound", dialed: "8562221111", human: false, seconds: 20, lane: "power", tags: [], zones: ["America/New_York"], scrubDate: "2026-10-01", phones: ["8562221111"], inboundConsent: false };
-  assert.ok(auditCall({ ...base, prior: { sameDay: 1, last24h: 1 } }).some((f) => f.code === "same_day_redial" && f.severity === "policy"));
-  assert.ok(auditCall({ ...base, prior: { sameDay: 3, last24h: 3 } }).some((f) => f.code === "over_3_calls_24h" && f.severity === "violation"));
+  assert.ok(!auditCall({ ...base, prior: { sameDay: 1, last24h: 1 } }).some((f) => f.code === "same_day_redial"), "a double dial (2nd call today) is allowed");
+  assert.ok(auditCall({ ...base, prior: { sameDay: 2, last24h: 2 } }).some((f) => f.code === "same_day_redial" && f.severity === "policy"), "3rd call today is flagged");
+  assert.ok(!auditCall({ ...base, prior: { sameDay: 1, last24h: 3 } }).some((f) => f.code === "over_24h_cap"), "4th call in 24 h is OK for power lane");
+  assert.ok(auditCall({ ...base, prior: { sameDay: 2, last24h: 4 } }).some((f) => f.code === "over_24h_cap" && f.severity === "violation"), "5th call in 24 h is a violation");
+  assert.ok(auditCall({ ...base, lane: "manual", prior: { sameDay: 1, last24h: 3 } }).some((f) => f.code === "over_24h_cap"), "manual lane (FL/OK/MD) caps at 3");
   assert.ok(!auditCall({ ...base, prior: { sameDay: 0, last24h: 0 } }).some((f) => /redial|over_3/.test(f.code)));
 });

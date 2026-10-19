@@ -86,6 +86,8 @@ BatchLeads pull adds Camden, Mercer, Atlantic, Cumberland, Ocean, Burlington, Gl
 - Dialing (WAVV): DNC+litigator scrub ≤31 days under Sum's own registry SAN, power
   lane only, 1 line until counsel signs off on abandonment (3%/30 days, 47 CFR
   64.1200(a)(7)); FL/OK/MD owners or area codes = manual lane, single line.
+  Frequency (owner decision 2026-10-19): WAVV double dial allowed — max 2 dials
+  per owner per day, max 4 per 24 h (3 for FL/OK/MD); one attempt per day.
   Calling policy Mon–Sat 9am–8pm in the owner's zone (mailing state), no Sundays or
   federal holidays. Opening (owner decision 2026-10-15): caller name + "calling
   from HouseSoldNJ — we're local real estate investors, and our calls are

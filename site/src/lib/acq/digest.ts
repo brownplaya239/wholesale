@@ -113,13 +113,13 @@ export function eodReport(all: CallRow[], day: string, x: DigestCtx, health: Hea
 
   const skipped = calls.filter((c) => /^agent\s*cancel/i.test(c.disposition ?? "")).length;
   const blocked = calls.filter((c) => /call\s*blocked/i.test(c.disposition ?? "")).length;
-  const redials = calls.filter((c) => c.flags.some((fl) => fl.code === "same_day_redial" || fl.code === "over_3_calls_24h")).length;
+  const redials = calls.filter((c) => c.flags.some((fl) => fl.code === "same_day_redial" || fl.code === "over_24h_cap")).length;
   const lines = [
     head,
     `*${f.dials}* dials · ${contacts} owners · ${f.humanAnswered} picked up · *${f.conversations}* conversations (${pct(f.contactRate)}) · ${mins(talk)} talk time · ${etTime(first)}–${etTime(last)} ET`,
     `🔥 Hot ${by("HOT")} · 📅 Booked ${by("BOOKED")} · 🌤 Warm ${by("WARM")} · 📞 Callbacks ${by("CALLBACK")} · Not interested ${by("NOT_INTERESTED")} · Wrong # ${by("WRONG_NUMBER") + by("WRONG_OWNER")} · Listed ${by("LISTED")} · DNC ${by("DNC")}`,
     ...(skipped || blocked || redials
-      ? [`Skipped by caller ${skipped} · Blocked by carrier ${blocked}${redials ? ` · ⚠️ ${redials} same-day redial(s) — double dial / shared list` : ""}`]
+      ? [`Skipped by caller ${skipped} · Blocked by carrier ${blocked}${redials ? ` · ⚠️ ${redials} call(s) over the 2-a-day limit — manual redials / shared list` : ""}`]
       : []),
   ];
 
