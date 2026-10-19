@@ -1,6 +1,6 @@
 # Written Do-Not-Call & Outbound Calling Procedures
 
-**Version 1.1 · effective at first caller training (planned 2026-10-12) · owner: Sumeet Sancheti**
+**Version 1.2 · effective at first caller training (planned 2026-10-12) · owner: Sumeet Sancheti**
 Status: in force for all outbound calling; draft for counsel review.
 
 This is the written policy required by 47 C.F.R. § 64.1200(c)(2)(i)(A) and
@@ -99,8 +99,13 @@ rules that differ for them.
      cleared: PA residents 9:00 am–7:00 pm, no Sundays or holidays, from about
      Oct 18, 2026; FL 8:00 am–8:00 pm.
 2. **Frequency.**
-   - At most one attempt per contact per day; never more than 3 calls in 24
-     hours to the same person about the same property.
+   - At most one attempt per contact per day. An attempt may be a WAVV
+     double dial (the same number redialed once, automatically, after a
+     no-answer): **max 2 dials per person per day**, never a third.
+   - Never more than **4 calls in any 24 hours** to the same person (3 for
+     FL/OK/MD residents or area codes, where it is state law).
+   - Never redial after a live answer, a voicemail left, a wrong number or
+     any stop-calling request.
    - The cadence is 8 attempts over about 30 days, then 90 days of rest.
    - Every number for a person counts toward that person's limit.
 3. **Opening, every call, before anything else:**
@@ -285,6 +290,7 @@ number, and every caller is retrained on it before their next shift.
 | Version | Date | Change |
 |---|---|---|
 | 1.0 | 2026-10-06 | First issue |
+| 1.2 | 2026-10-19 | Double dial allowed: max 2 dials per person per day, max 4 per 24 h (3 for FL/OK/MD) (owner decision) |
 | 1.1 | 2026-10-15 | Opening: "calling from HouseSoldNJ — we're local real estate investors, and our calls are recorded" (owner decision); agent answer names Sumeet as owner |
 
 *This document governs how this business calls people. It summarizes the rules
