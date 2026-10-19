@@ -34,7 +34,9 @@ async function sendWebhook(payload: object): Promise<Delivery | null> {
  * property reports (values, offer math) or compliance/QA alerts.
  */
 export function emailRecipients(team: boolean, env: { to?: string; team?: string } = { to: process.env.LEAD_ALERT_TO, team: process.env.LEAD_ALERT_TEAM_TO }): string[] {
-  const split = (s?: string) => (s ?? "").split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
+  // Tolerate how people paste lists into Vercel (semicolons, spaces, newlines,
+  // quotes, "Name <a@b>"): one malformed entry makes Resend 422 the whole email.
+  const split = (s?: string) => (s ?? "").match(/[^\s,;<>"']+@[^\s,;<>"']+\.[a-z]{2,}/gi)?.map((x) => x.toLowerCase()) ?? [];
   return [...new Set([...split(env.to), ...(team ? split(env.team) : [])])];
 }
 
