@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { dispositionKey, MAX_ATTEMPTS, missingQualification, planDisposition, type ContactState, type OppState } from "../src/lib/acq/dispositions.ts";
-import { auditCall, callWindowFlags, isFederalHoliday, trainedCallers } from "../src/lib/acq/compliance.ts";
+import { alertViolations, auditCall, callWindowFlags, isFederalHoliday, trainedCallers } from "../src/lib/acq/compliance.ts";
 import { matchWavvSignature, verifyWavvSignature } from "../src/lib/acq/wavv.ts";
 import { formatIntel, planIntel, type CallIntel } from "../src/lib/acq/callIntel.ts";
 import { Ghl } from "../src/lib/acq/ghl.ts";
@@ -195,12 +195,25 @@ test("audit: suppressed contact, missing/expired scrub, inbound consent exemptio
   const base = { at: TUE, direction: "outbound", dialed: "8562221111", human: true, seconds: 90, lane: "power", tags: [], zones: ["America/New_York"], scrubDate: "2026-10-01", phones: ["8562221111"], inboundConsent: false };
   assert.deepEqual(auditCall(base), []);
   assert.ok(auditCall({ ...base, lane: "suppressed" }).some((f) => f.code === "dialed_suppressed_contact"));
+  assert.ok(auditCall({ ...base, tags: ["dnc"] }).some((f) => f.code === "dialed_suppressed_contact"));
+  for (const lane of ["recycle", "research", "reskip", "mail_only"]) {
+    assert.deepEqual(auditCall({ ...base, lane }).map((f) => [f.severity, f.code]), [["violation", "dialed_parked_contact"]], lane);
+  }
+  assert.deepEqual(auditCall({ ...base, lane: "recycle", tags: ["dnc"] }).map((f) => f.code), ["dialed_suppressed_contact"], "dnc wins over parking");
   assert.ok(auditCall({ ...base, scrubDate: null }).some((f) => f.code === "no_scrub_on_file"));
   assert.ok(auditCall({ ...base, scrubDate: "2026-08-20" }).some((f) => f.code === "scrub_expired"));
   assert.deepEqual(auditCall({ ...base, scrubDate: null, lane: "inbound", inboundConsent: true }), []);
   assert.ok(auditCall({ ...base, seconds: 0 }).some((f) => f.code === "possible_abandoned"));
   assert.ok(auditCall({ ...base, dialed: "6095550000" }).some((f) => f.code === "number_not_on_record"));
   assert.deepEqual(auditCall({ ...base, direction: "inbound", lane: "suppressed" }), []);
+});
+
+test("alerts: a parked-lane dial alone sends no instant email; DNC and other violations still do", () => {
+  const base = { at: TUE, direction: "outbound", dialed: "8562221111", human: true, seconds: 90, lane: "power", tags: [], zones: ["America/New_York"], scrubDate: "2026-10-01", phones: ["8562221111"], inboundConsent: false };
+  assert.deepEqual(alertViolations(auditCall({ ...base, lane: "recycle" })), []);
+  assert.deepEqual(alertViolations(auditCall({ ...base, lane: "suppressed" })).map((f) => f.code), ["dialed_suppressed_contact"]);
+  assert.deepEqual(alertViolations(auditCall({ ...base, lane: "recycle", scrubDate: null })).map((f) => f.code), ["no_scrub_on_file"]);
+  assert.deepEqual(alertViolations(auditCall({ ...base, seconds: 0 })), [], "warnings never alert");
 });
 
 test("audit: a caller without a signed training acknowledgement is a violation", () => {

@@ -14,7 +14,7 @@ import { fanOut, reportUrl } from "@/lib/leads/notify";
 import { saveFullLead } from "@/lib/leads/store";
 import { assignWorkflow } from "@/lib/enrich/insights";
 import { extractIntel, planIntel } from "./callIntel";
-import { auditCall, trainedCallers, type Flag } from "./compliance";
+import { alertViolations, auditCall, trainedCallers, type Flag } from "./compliance";
 import { addBusinessDays, dispositionKey, planDisposition, type ContactState, type OppState, type Plan } from "./dispositions";
 import { ghlFromEnv, type Ghl, type GhlContact } from "./ghl";
 import { PIPELINES, TAGS, type DispositionKey, type PipelineKey } from "./schema";
@@ -271,6 +271,8 @@ export async function processEnded(db: Db, id: string): Promise<string> {
     const violations = flags.filter((f) => f.severity === "violation");
     if (violations.length) {
       await ghl.addTags(ctx.contact.id, [TAGS.violation]);
+    }
+    if (alertViolations(flags).length) {
       await alert(`⚠️ COMPLIANCE: ${name} — ${violations.map((v) => v.code).join(", ")}`, [
         ...violations.map((v) => `• ${v.code}: ${v.detail}`),
         `Caller: ${call.userId ?? "?"} · call ${id}`,

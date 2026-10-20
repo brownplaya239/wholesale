@@ -5,7 +5,9 @@
  *  violation (a legal line):
  *   - outside 8am-9pm in ANY time zone the owner may be in (47 CFR 64.1200(c)(1))
  *   - a cold contact dialed with no DNC scrub on file, or one > 31 days old
- *   - a contact the system had suppressed (DNC / mail-only / recycled) was dialed
+ *   - a contact the system had suppressed (DNC) was dialed
+ *   - a contact parked out of dialing (mail-only / recycled / reskip / research)
+ *     was dialed — kept as a violation, but not emailed per call (alertViolations)
  *   - the caller has no signed training acknowledgement (ACQ_TRAINED_CALLERS)
  *  policy (our tighter rule, Mon-Sat 9am-8pm local, no Sunday/federal holiday)
  *  warning: number not on the contact record; human answered but 0 s talk
@@ -18,7 +20,19 @@
 export type Flag = { severity: "violation" | "policy" | "warning"; code: string; detail: string };
 
 export const SCRUB_VALID_DAYS = 31;
-const SUPPRESSED_LANES = new Set(["suppressed", "mail_only", "reskip", "research", "recycle"]);
+/** Out of every dial list for workflow reasons, not a do-not-call request. */
+const PARKING_LANES = new Set(["mail_only", "reskip", "research", "recycle"]);
+export const PARKED_CODE = "dialed_parked_contact";
+
+/**
+ * Violations worth an instant email. A parked (non-DNC) contact dialed is
+ * usually the other leg of a double dial or a stale WAVV list — dozens a day
+ * would drown the real alerts — so it stays on the call log, admin page, GHL
+ * tag and EOD digest only.
+ */
+export function alertViolations(flags: Flag[]): Flag[] {
+  return flags.filter((f) => f.severity === "violation" && f.code !== PARKED_CODE);
+}
 
 export function localParts(at: Date, tz: string): { hour: number; minute: number; weekday: number; ymd: string } {
   const p = Object.fromEntries(
@@ -113,8 +127,10 @@ export function auditCall(a: AuditInput): Flag[] {
     flags.push({ severity: "violation", code: "caller_not_trained", detail: "caller is not on the signed training log (ACQ_TRAINED_CALLERS)" });
   }
   const lane = a.lane ?? "";
-  if (SUPPRESSED_LANES.has(lane) || a.tags.includes("dnc")) {
+  if (lane === "suppressed" || a.tags.includes("dnc")) {
     flags.push({ severity: "violation", code: "dialed_suppressed_contact", detail: `contact lane "${lane || "?"}"${a.tags.includes("dnc") ? " + dnc tag" : ""}` });
+  } else if (PARKING_LANES.has(lane)) {
+    flags.push({ severity: "violation", code: PARKED_CODE, detail: `contact lane "${lane}" (parked, not DNC)` });
   }
   if (!a.inboundConsent) {
     if (!a.scrubDate) {
