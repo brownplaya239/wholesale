@@ -717,3 +717,15 @@ test("one attempt per day: a same-day redial keeps the attempt count and is flag
   assert.ok(auditCall({ ...base, lane: "manual", prior: { sameDay: 1, last24h: 3 } }).some((f) => f.code === "over_24h_cap"), "manual lane (FL/OK/MD) caps at 3");
   assert.ok(!auditCall({ ...base, prior: { sameDay: 0, last24h: 0 } }).some((f) => /redial|over_3/.test(f.code)));
 });
+
+test("a miss on a closed-out contact (double-dial leg processed after Not Interested) doesn't re-queue it", () => {
+  for (const lane of ["recycle", "research", "reskip", "mail_only"]) {
+    const c: ContactState = { lane, attempts: 1, conversations: 1, phones: ["8562221111"], invalidPhones: [], propertyCount: 1 };
+    const p = planDisposition("NO_ANSWER", { at: TUE, human: false, seconds: 9, dialed: "8562221111", sameDay: true }, c, null);
+    assert.equal(p.contactFields["Next Call Due"], undefined, lane);
+    assert.equal(p.contactFields["Dial Lane"], undefined, lane);
+    assert.equal(p.contactFields["Last Disposition"], undefined, lane);
+  }
+  const live = planDisposition("VOICEMAIL", { at: TUE, human: false, seconds: 9, dialed: "8562221111" }, { lane: "power", attempts: 1, conversations: 0, phones: ["8562221111"], invalidPhones: [], propertyCount: 1 }, null);
+  assert.ok(live.contactFields["Next Call Due"], "power lane still gets its next call date");
+});

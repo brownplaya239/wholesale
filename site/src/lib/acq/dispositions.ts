@@ -239,6 +239,15 @@ export function planDisposition(key: DispositionKey, call: CallFacts, c: Contact
   switch (key) {
     case "NO_ANSWER":
     case "VOICEMAIL": {
+      // A miss on a contact already closed out (the other leg of a double
+      // dial processed after "Not Interested", a dial off the wrong list)
+      // must not hand it a new Next Call Due and put it back in a queue.
+      if (["recycle", "research", "reskip", "mail_only"].includes(c.lane)) {
+        plan.contactFields = { "Call Attempts": attempts, "Last Call Date": ymd(now) };
+        plan.opp = null;
+        plan.notes.push(`"${label}" logged while the contact is in lane "${c.lane}"; no dial-state change.`);
+        break;
+      }
       if (attempts >= MAX_ATTEMPTS) {
         setLane("recycle", `${MAX_ATTEMPTS} attempts, no contact`);
         plan.contactFields["Recycle Until"] = ymd(new Date(now.getTime() + RECYCLE_DAYS.unreachable * DAY));
