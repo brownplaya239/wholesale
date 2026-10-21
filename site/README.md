@@ -53,7 +53,8 @@ Both steps POST to `/api/lead`:
   WITH this artifact are the business's only lawful texting lane.
 
 Delivery fans out in parallel to every configured channel — CRM webhook,
-Resend email, Slack. Any one success = delivered; all-fail returns 502 and the
+Resend email, Slack (one channel per alert type via `SLACK_*_WEBHOOK_URL`,
+falling back to `SLACK_WEBHOOK_URL` — see `src/lib/leads/notify.ts`). Any one success = delivered; all-fail returns 502 and the
 UI shows the "call Sum directly" fallback. Per-channel failures log
 `LEAD DELIVERY FAILURE` (set a Vercel log-drain alert on that string).
 

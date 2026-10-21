@@ -10,7 +10,7 @@
 import { site } from "@/config/site";
 import type { Db } from "@/lib/db";
 import { enrichLead } from "@/lib/leads/enrich";
-import { fanOut, reportUrl } from "@/lib/leads/notify";
+import { fanOut, reportUrl, type SlackKind } from "@/lib/leads/notify";
 import { saveFullLead } from "@/lib/leads/store";
 import { assignWorkflow } from "@/lib/enrich/insights";
 import { extractIntel, planIntel } from "./callIntel";
@@ -51,7 +51,7 @@ export function callUrl(callId: string): string {
   return `${site.url}/admin/calls/${encodeURIComponent(callId)}`;
 }
 
-async function alert(subject: string, lines: (string | false | null | undefined)[], tag: string, opts: { team?: boolean } = {}): Promise<void> {
+async function alert(subject: string, lines: (string | false | null | undefined)[], tag: string, opts: { team?: boolean; slack: SlackKind }): Promise<void> {
   const text = lines.filter(Boolean).join("\n");
   await fanOut(subject, text, { stage: "acq_alert", subject, text }, tag, undefined, opts).catch((e) => console.error(`ACQ ALERT FAILURE ${String(e)}`));
 }
@@ -277,7 +277,7 @@ export async function processEnded(db: Db, id: string): Promise<string> {
         ...violations.map((v) => `• ${v.code}: ${v.detail}`),
         `Caller: ${call.userId ?? "?"} · call ${id}`,
         contactUrl(ctx.contact.id),
-      ], `call=${id} compliance`);
+      ], `call=${id} compliance`, { slack: "compliance" });
     }
     if (plan.notify) {
       const emoji = plan.notify.level === "booked" ? "📅" : plan.notify.level === "hot" ? "🔥" : "🌤";
@@ -288,7 +288,7 @@ export async function processEnded(db: Db, id: string): Promise<string> {
         call.note && `Caller note: ${call.note}`,
         `Caller: ${call.userId ?? "?"} · ${call.seconds ?? 0}s`,
         contactUrl(ctx.contact.id),
-      ], `call=${id} notify`, { team: plan.notify.level === "hot" || plan.notify.level === "booked" });
+      ], `call=${id} notify`, { team: plan.notify.level === "hot" || plan.notify.level === "booked", slack: plan.notify.level === "warm" ? "warm" : "hot" });
     }
     if (plan.hotReport) await hotLeadReport(db, ctx, oppId, id).catch((e) => console.error(`HOT REPORT FAILURE call=${id} ${String(e)}`));
     return "done";
@@ -414,7 +414,7 @@ export async function processIntel(db: Db, id: string): Promise<string> {
       `Summary: ${res.intel.summary}`,
       `Caller: ${call.userId ?? "?"} · call ${id}`,
       contactUrl(ctx.contact.id),
-    ], `call=${id} intel`);
+    ], `call=${id} intel`, { slack: "compliance" });
   }
   return "done";
 }

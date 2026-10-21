@@ -64,7 +64,7 @@ export async function enrichLead(id: string, opts: { notify: boolean; reason: En
         // Seller answers that arrived while this ran are folded in.
         const live = currentDossier(fresh) ?? dossier;
         const { subject, text, html } = enrichedEmail(fresh, live, opts.reason, assignWorkflow(live, leadFacts(fresh)));
-        const results = await fanOut(subject, text, { stage: "enriched", leadId: id }, `leadId=${id} stage=enriched`, html);
+        const results = await fanOut(subject, text, { stage: "enriched", leadId: id }, `leadId=${id} stage=enriched`, html, { slack: "leads" });
         if (results.length && !results.some((r) => r.ok)) await releaseNotification(db, id, key);
       }
     }

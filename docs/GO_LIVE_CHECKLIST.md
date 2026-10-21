@@ -254,7 +254,8 @@ not touch live GHL) → **Sensitive** ON → Save.
 | `ANTHROPIC_API_KEY` | console.anthropic.com → API Keys → Create. Set a monthly spend limit (Billing → Limits) |
 | `WAVV_API_KEY` | from 2.5 |
 | `WAVV_WEBHOOK_SECRET` | from 2.7 (added after the merge, then redeploy) |
-| `SLACK_WEBHOOK_URL` | Slack incoming webhook for #acq-alerts: api.slack.com/apps → Create New App → From scratch → Incoming Webhooks ON → Add New Webhook → pick channel → copy URL. Carries hot/booked/warm alerts, compliance violations, AI call-review alerts and new web leads |
+| `SLACK_WEBHOOK_URL` | Slack incoming webhook for #acq-alerts: api.slack.com/apps → Create New App → From scratch → Incoming Webhooks ON → Add New Webhook → pick channel → copy URL. Default for every alert type (hot/booked/warm, compliance violations, AI call review, new web leads) that has no channel of its own |
+| `SLACK_HOT_WEBHOOK_URL` / `SLACK_WARM_WEBHOOK_URL` / `SLACK_LEADS_WEBHOOK_URL` / `SLACK_COMPLIANCE_WEBHOOK_URL` | optional: one webhook per channel (e.g. #acq-hot, #acq-warm, #leads-web, #compliance) — same steps, one Add New Webhook per channel. `off` mutes that type in Slack only |
 | `ACQ_TRAINED_CALLERS` | Monday, after sign-offs (6.4) |
 
 ---

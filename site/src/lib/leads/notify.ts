@@ -71,14 +71,44 @@ async function sendEmail(subject: string, text: string, html?: string, team = fa
   }
 }
 
-async function sendSlack(text: string): Promise<Delivery | null> {
-  const url = process.env.SLACK_WEBHOOK_URL;
+/**
+ * Slack channel per alert type — an incoming webhook is bound to one channel,
+ * so each type gets its own URL. Unset falls back to SLACK_WEBHOOK_URL;
+ * "off" keeps that type out of Slack (email + CRM webhook still get it).
+ *   hot        🔥 Hot / 📅 Booked call outcomes (act now)
+ *   warm       🌤 Warm call outcomes
+ *   leads      new web leads, seller details, property reports
+ *   compliance ⚠️ violations (e.g. dialed_suppressed_contact) + 🤖 AI call-review flags
+ * The daily summary has its own SLACK_DIGEST_WEBHOOK_URL (acq/digestRun.ts).
+ */
+export type SlackKind = "hot" | "warm" | "leads" | "compliance";
+
+const SLACK_ENV: Record<SlackKind, string> = {
+  hot: "SLACK_HOT_WEBHOOK_URL",
+  warm: "SLACK_WARM_WEBHOOK_URL",
+  leads: "SLACK_LEADS_WEBHOOK_URL",
+  compliance: "SLACK_COMPLIANCE_WEBHOOK_URL",
+};
+
+export function slackWebhook(kind: SlackKind | undefined, env: Record<string, string | undefined> = process.env): string | null {
+  const own = (kind ? env[SLACK_ENV[kind]] : undefined)?.trim();
+  if (own && /^(off|none)$/i.test(own)) return null;
+  return own || env.SLACK_WEBHOOK_URL?.trim() || null;
+}
+
+/** Bold subject on top (Slack never sees the email subject), unless the body already opens with it. */
+export function slackText(subject: string, text: string): string {
+  return text.startsWith(subject) ? text : `*${subject}*\n${text}`;
+}
+
+async function sendSlack(subject: string, text: string, kind?: SlackKind): Promise<Delivery | null> {
+  const url = slackWebhook(kind);
   if (!url) return null;
   try {
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text: slackText(subject, text), unfurl_links: false, unfurl_media: false }),
       signal: AbortSignal.timeout(8000),
     });
     return { channel: "slack", ok: res.ok, detail: `HTTP ${res.status}` };
@@ -88,8 +118,8 @@ async function sendSlack(text: string): Promise<Delivery | null> {
 }
 
 /** Sends everywhere configured; `results` is empty when nothing is configured. */
-export async function fanOut(subject: string, text: string, payload: object, tag: string, html?: string, opts: { team?: boolean } = {}): Promise<Delivery[]> {
-  const results = (await Promise.all([sendWebhook(payload), sendEmail(subject, text, html, opts.team), sendSlack(text)])).filter(
+export async function fanOut(subject: string, text: string, payload: object, tag: string, html?: string, opts: { team?: boolean; slack?: SlackKind } = {}): Promise<Delivery[]> {
+  const results = (await Promise.all([sendWebhook(payload), sendEmail(subject, text, html, opts.team), sendSlack(subject, text, opts.slack)])).filter(
     (r): r is Delivery => r !== null
   );
   for (const f of results.filter((r) => !r.ok)) {
