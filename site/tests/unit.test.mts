@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { selectComps, valuate, stepsFor, type CompCandidate, type Subject } from "../src/lib/enrich/comps.ts";
 import { computeWorksheet, defaultWorksheet } from "../src/lib/enrich/worksheet.ts";
+import { investorEvidence, rangeOf, type BuyInput, type FlipInput } from "../src/lib/enrich/investor.ts";
 import { buildInsights, assignWorkflow, firstTouch } from "../src/lib/enrich/insights.ts";
 import { extractUnit } from "../src/lib/enrich/geocode.ts";
 import { pickUnit, locationUnit, kindOf } from "../src/lib/enrich/parcel.ts";
@@ -706,4 +707,42 @@ test("outbound leads: call-list signals count toward distress", () => {
   assert.equal(d.level, "high");
   assert.deepEqual(d.signals.map((x) => x.label), ["Call list: tax delinquent", "Call list: vacant"]);
   assert.equal(assessDistress(null, { ...FACTS, occupancy: "Vacant", listSignals: "Vacant" }).signals.length, 1, "vacant not double-counted");
+});
+
+test("flip pairs give ARV, company buys give the as-is price; far/unlike houses dropped", () => {
+  const s = { kind: "single_family" as const, lat: LAT, lng: LNG, livingSpace: 1500, yearBuilt: 1960 };
+  const flip = (i: number, over: Partial<FlipInput> = {}): FlipInput => ({
+    pin: `f${i}`, location: `${i} ELM ST`, municipality: "TEST TWP", lat: offset(0.3 + i * 0.1), lng: LNG,
+    buyDate: "2025-03-01", buyPrice: 150_000 + i * 5_000, buyer: "ACME HOMES LLC", buyType: "arm's-length",
+    sellDate: "2025-11-01", sellPrice: 300_000 + i * 10_000, livingSpace: 1500, yearBuilt: 1955, ...over,
+  });
+  const buy = (i: number, over: Partial<BuyInput> = {}): BuyInput => ({
+    pin: `b${i}`, location: `${i} OAK ST`, municipality: "TEST TWP", lat: offset(0.5), lng: LNG, date: "2026-02-01",
+    price: 160_000 + i * 5_000, buyer: "QUICK CASH LLC", buyType: "arm's-length", livingSpace: 1450, yearBuilt: 1950, ...over,
+  });
+  const ev = investorEvidence(
+    s,
+    [flip(1), flip(2), flip(3), flip(4, { livingSpace: 3000 }), flip(5, { lat: offset(6) })],
+    [buy(1), buy(2, { pin: "f1", date: "2025-03-01" })],
+    730
+  );
+  assert.deepEqual(ev.flips.map((f) => f.pin), ["f1", "f2", "f3"], "nearest first; oversized and 6-mi flips dropped");
+  assert.equal(ev.radiusMi, 4, "only 2 buys inside 2 mi, so that search widened to 4");
+  assert.equal(ev.flips[0].daysHeld, 245);
+  assert.ok(ev.arv && ev.arv.n === 3 && /per sq ft/.test(ev.arv.method));
+  assert.equal(ev.arv!.mid, 320_000);
+  // buys b1 + f1's own purchase (listed once) + flips f2/f3's purchases = 4
+  assert.equal(ev.buyPrice!.n, 4);
+  assert.ok(ev.buyPrice!.mid >= 150_000 && ev.buyPrice!.mid <= 175_000);
+  assert.equal(investorEvidence(s, [flip(1)], [], 730).arv, null, "one flip is shown but makes no range");
+  assert.equal(rangeOf([{ price: 1, livingSpace: null }], null, "x"), null);
+});
+
+test("worksheet ARV comes from flips when there are any", () => {
+  const d = { comps: { data: { valuation: { low: 185_000, mid: 210_000, high: 245_000, confidence: "medium" } } }, characteristics: { livingSpace: { value: null, source: null } }, parcel: { data: null } } as never;
+  assert.equal(defaultWorksheet(d, null).inputs.arv, 245_000);
+  const withFlips = { ...(d as object), investor: { status: "ok", data: { arv: { low: 290_000, mid: 320_000, high: 350_000, n: 4, method: "m" } } } } as never;
+  const ws = defaultWorksheet(withFlips, null);
+  assert.equal(ws.inputs.arv, 320_000);
+  assert.match(ws.basis.arv!, /Median flip resale nearby \(4 renovated resales/);
 });

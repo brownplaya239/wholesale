@@ -7,6 +7,8 @@ import type { Db } from "@/lib/db";
 import { streetViewMeta } from "@/lib/leads/images";
 import { assessmentCheck, haversineMi, reconcileAssessment, reconcileOwnSale, selectComps, type CompCandidate, type Subject } from "./comps";
 import { floodZone } from "./flood";
+import { investorEvidence } from "./investor";
+import { DISTRESS_NU, nuLabel } from "@/lib/sr1a";
 import { cleanAddress, extractUnit, geocode } from "./geocode";
 import { nowIso } from "./http";
 import { buildInsights, type LeadFacts } from "./insights";
@@ -28,6 +30,8 @@ import {
   assessmentRatio,
   compCandidates,
   deedHistory,
+  flipPairs,
+  investorBuys,
   marketStats,
   salesLoaded,
   sameBuildingSales,
@@ -43,6 +47,7 @@ import type {
   Dossier,
   Fact,
   GeocodeData,
+  InvestorEvidence,
   MarketStats,
   ParcelData,
   PropertyKind,
@@ -397,6 +402,46 @@ export function mlsCoverage(
   return { level: share >= 0.25 ? "good" : closings === 0 && nearby.status !== "ok" ? "none" : "thin", closings, deeds: pool.deed };
 }
 
+/**
+ * Flip pairs and company purchases near the property (deed file only, so it
+ * works where the MLS feed doesn't reach).
+ */
+async function runInvestor(db: Db, salesSrc: SourceRef, p: ParcelData, g: GeocodeData, chars: Characteristics): Promise<Section<InvestorEvidence>> {
+  if (p.kind === "land" || p.kind === "other") return { status: "not_available", data: null, source: salesSrc, note: "Flip and investor-buy evidence is for houses, condos and 1–4 family buildings." };
+  let munis: MuniShape[] = [];
+  try {
+    munis = await municipalitiesNear(g.lat, g.lng, 4);
+  } catch {
+    // Neighboring towns unavailable — search the home municipality only.
+  }
+  const muncodes = [...new Set([p.muncode, ...munis.map((m) => m.code)])];
+  const windowDays = 730;
+  const q = { muncodes, kind: p.kind, propClass: p.propClass, sinceDays: windowDays, excludePin: p.pin };
+  const [flips, buys] = await Promise.all([flipPairs(db, q), investorBuys(db, { ...q, distressCodes: [...DISTRESS_NU] })]);
+  const attrs = flips.length + buys.length ? await fetchPinAttrs([...flips.map((f) => f.pin), ...buys.map((b) => b.pin)]) : new Map<string, PinAttrs>();
+  const at = (pin: string) => attrs.get(pin);
+  const kindOf = (usable: boolean, nu: string | null) => (usable ? "arm's-length" : nuLabel(nu) ?? `non-usable ${nu ?? ""}`.trim());
+  const ev = investorEvidence(
+    { kind: p.kind, lat: g.lat, lng: g.lng, livingSpace: chars.livingSpace.value, yearBuilt: chars.yearBuilt.value },
+    flips.map((f) => ({
+      ...f,
+      municipality: at(f.pin)?.municipality ?? null,
+      lat: at(f.pin)?.lat ?? null,
+      lng: at(f.pin)?.lng ?? null,
+      buyType: kindOf(!f.buyNuCode || Number(f.buyNuCode) === 0, f.buyNuCode),
+    })),
+    buys.map((b) => ({ ...b, municipality: at(b.pin)?.municipality ?? null, lat: at(b.pin)?.lat ?? null, lng: at(b.pin)?.lng ?? null, buyType: kindOf(b.usable, b.nuCode) })),
+    windowDays
+  );
+  const any = ev.flips.length + ev.buys.length > 0;
+  return {
+    status: any ? "ok" : "missing",
+    data: ev,
+    source: salesSrc,
+    note: any ? undefined : `No flips or company purchases of similar homes within ${ev.radiusMi} mi in the loaded deed years — loading more SR1A years widens this.`,
+  };
+}
+
 export type DossierInput = { address: string; unit: string | null; lead: LeadFacts };
 
 export async function buildDossier(input: DossierInput, db: Db | null): Promise<Dossier> {
@@ -437,7 +482,7 @@ export async function buildDossier(input: DossierInput, db: Db | null): Promise<
   const { characteristics, conflicts } = mergeCharacteristics(parcelRes.parcel, history, mlsProperty);
 
   const kind = p?.kind ?? "other";
-  const [market, comps, photos, ratio] = await Promise.all([
+  const [market, comps, photos, ratio, investor] = await Promise.all([
     db && salesSrc && p
       ? marketStats(db, p.muncode, p.municipality, kind, p.propClass, salesSrc).catch(
           (e) => ({ status: "error", data: null, source: salesSrc, error: String(e) }) as Section<MarketStats>
@@ -450,6 +495,9 @@ export async function buildDossier(input: DossierInput, db: Db | null): Promise<
       : Promise.resolve({ status: "missing", data: null, source: salesSrc, note: "Needs a matched parcel and location." } as Section<CompsResult>),
     g ? photoCheck({ address: g.standardized, lat: g.lat, lng: g.lng, rings: p?.rings ?? null, streetView }) : Promise.resolve(undefined),
     db && p && p.assessed.net ? assessmentRatio(db, p.muncode, p.municipality, kind, p.propClass).catch(() => null) : Promise.resolve(null),
+    db && salesSrc && p && g
+      ? runInvestor(db, salesSrc, p, g, characteristics).catch((e) => ({ status: "error", data: null, source: salesSrc, error: String(e) }) as Section<InvestorEvidence>)
+      : Promise.resolve(db ? ({ status: "missing", data: null, source: salesSrc, note: "Needs a matched parcel and location." } as Section<InvestorEvidence>) : noDb<InvestorEvidence>("Flip and investor-buy evidence")),
   ]);
   const check = assessmentCheck(p?.assessed.net, ratio);
   const assessment: Section<AssessmentCheck> = check
@@ -497,6 +545,7 @@ export async function buildDossier(input: DossierInput, db: Db | null): Promise<
     market,
     comps,
     assessment,
+    investor,
     mls: { subject: mlsProperty, nearby: mlsListings, coverage: mlsCoverage(mlsListings, comps.data?.pool) },
     streetView,
     photoCheck: photos,
@@ -505,7 +554,7 @@ export async function buildDossier(input: DossierInput, db: Db | null): Promise<
   };
   const withSeller = withSellerFacts(dossier, input.lead);
   withSeller.insights = buildInsights(withSeller, input.lead);
-  const all = [geo, parcelRes.parcel, history, flood, market, comps, mlsProperty, mlsListings]
+  const all = [geo, parcelRes.parcel, history, flood, market, comps, investor, mlsProperty, mlsListings]
     .map((s) => s.source)
     .filter((s): s is SourceRef => Boolean(s));
   withSeller.sources = [...new Map(all.map((s) => [s.id, s])).values()];

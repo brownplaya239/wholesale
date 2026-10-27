@@ -38,12 +38,18 @@ const UNKNOWN_CONDITION = { perSqft: 30, flat: 50_000 };
 
 export function defaultWorksheet(d: Dossier, condition: string | null): { inputs: WorksheetInputs; basis: WorksheetBasis } {
   const v = d.comps.data?.valuation ?? null;
+  // Renovated resales near the property beat "top quarter of the comps" as ARV evidence.
+  const flipArv = d.investor?.data?.arv ?? null;
   const sqft = d.characteristics.livingSpace.value;
   const taxes = d.parcel.data?.lastYearTaxes ?? null;
   const rep = (condition && CONDITION_REPAIRS[condition]) || UNKNOWN_CONDITION;
   const basis: WorksheetBasis = {
     asIsValue: v ? `Comp-based estimate (${v.confidence} confidence)` : "No comp-based estimate — enter manually",
-    arv: v ? "Assumption: upper quartile of comps ≈ renovated condition — verify with renovated comps" : "Enter manually",
+    arv: flipArv
+      ? `Median flip resale nearby (${flipArv.n} renovated resales; middle half $${flipArv.low.toLocaleString()}–$${flipArv.high.toLocaleString()})`
+      : v
+        ? "Assumption: upper quartile of comps ≈ renovated condition — no flips found nearby; verify with renovated comps"
+        : "Enter manually",
     livingSpace: d.characteristics.livingSpace.source ? `Source: ${d.characteristics.livingSpace.source.name}` : "Unknown — enter from walkthrough",
     repairPerSqft: condition ? `Assumption for "${condition}" (seller-reported)` : "Assumption — condition not reported",
     monthlyTaxes: taxes ? `Last year's taxes ÷ 12 (MOD-IV tax list)` : "Assumption — taxes not on record",
@@ -52,7 +58,7 @@ export function defaultWorksheet(d: Dossier, condition: string | null): { inputs
     basis,
     inputs: {
       asIsValue: v?.mid ?? null,
-      arv: v?.high ?? null,
+      arv: flipArv?.mid ?? v?.high ?? null,
       livingSpace: sqft,
       repairPerSqft: rep.perSqft,
       repairFlat: rep.flat,

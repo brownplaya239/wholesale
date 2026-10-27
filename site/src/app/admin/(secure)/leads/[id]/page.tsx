@@ -219,6 +219,15 @@ function listingSearchLinks(zip: string, address: string | null) {
   ].filter(Boolean) as { label: string; href: string }[];
 }
 
+/** Recent closings on public sites — fills the deed file's lag where there's no MLS feed. */
+function soldSearchLinks(zip: string) {
+  if (!zip) return [];
+  return [
+    { label: `Redfin · sold last 6 months in ${zip}`, href: `https://www.redfin.com/zipcode/${zip}/filter/include=sold-6mo` },
+    { label: `Zillow · recently sold in ${zip}`, href: `https://www.zillow.com/homes/recently_sold/${zip}_rb/` },
+  ];
+}
+
 export default async function LeadReport({
   params,
   searchParams,
@@ -255,6 +264,10 @@ export default async function LeadReport({
   const thinMls = coverage?.level === "thin" || coverage?.level === "none";
   const zip = zip5(g?.postal);
   const searchLinks = listingSearchLinks(zip, g?.standardized ?? null);
+  const soldLinks = soldSearchLinks(zip);
+  // No MLS here (not connected, or the feed barely sees this area): comps are deed-only.
+  const noMls = thinMls || !mls || mls.nearby.status === "not_configured";
+  const inv = d?.investor?.data ?? null;
   const assessOff = Boolean(a && v && (a.implied < v.low * 0.9 || a.implied > v.high * 1.1));
   const outbound = src.channel === "outbound";
   const lastSale = p?.lastSale ?? null;
@@ -332,7 +345,7 @@ export default async function LeadReport({
       {d && (
         <section className="rounded-2xl border border-line bg-cream/40 p-4 break-inside-avoid" aria-label="Diligence snapshot">
           <h2 className="text-sm font-bold uppercase tracking-wide text-ink-soft">Diligence snapshot</h2>
-          <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
+          <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-5">
             <Stat
               label="Value — comparable sales"
               value={v ? `${money(v.low)} – ${money(v.high)}` : "No comp range"}
@@ -348,6 +361,28 @@ export default async function LeadReport({
                   : (d.assessment?.note ?? "Not computed on this report — re-run enrichment")
               }
               tone={assessOff ? "warn" : a && v ? "good" : undefined}
+            />
+            <Stat
+              label="ARV — flips nearby"
+              value={inv?.arv ? `≈ ${money(inv.arv.mid)}` : "No flips found"}
+              sub={
+                inv?.arv
+                  ? `${inv.arv.n} renovated resales · middle half ${money(inv.arv.low)}–${money(inv.arv.high)}`
+                  : inv?.flips.length
+                    ? `${inv.flips.length} flip${inv.flips.length === 1 ? "" : "s"} nearby — too few for a range; see section 5`
+                    : (d.investor?.note ?? "Re-run enrichment to compute")
+              }
+            />
+            <Stat
+              label="Investors pay (as-is)"
+              value={inv?.buyPrice ? `≈ ${money(inv.buyPrice.mid)}` : "—"}
+              sub={
+                inv?.buyPrice
+                  ? `${inv.buyPrice.n} company purchases · middle half ${money(inv.buyPrice.low)}–${money(inv.buyPrice.high)}`
+                  : inv?.buys.length
+                    ? `${inv.buys.length} company purchase${inv.buys.length === 1 ? "" : "s"} nearby — too few for a range`
+                    : "No company purchases of similar homes nearby"
+              }
             />
             <Stat
               label={`Town market (${d.market.data ? `${d.market.data.windowDays} days` : "deeds"})`}
@@ -696,7 +731,23 @@ export default async function LeadReport({
       </Card>
 
       {/* 5 */}
-      <Card n={5} title="Comparable sales — sold, then for sale">
+      <Card n={5} title="Comparable sales — sold, investor deals, for sale">
+        {d && noMls && (
+          <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            <strong>Deed-only comps — no MLS feed covers this area.</strong> Sales come from the state deed file
+            {d.comps.source?.asOf ? ` (${d.comps.source.asOf})` : ""}, so the last few months of closings aren&apos;t in yet, and there are no beds/baths,
+            photos or condition — a renovated house and a gut job look the same. Use the flips below for ARV, ask the seller for beds/baths, and check
+            recent sales before pricing:{" "}
+            {soldLinks.map((l, i) => (
+              <span key={l.href}>
+                {i > 0 && " · "}
+                <a className="underline" target="_blank" rel="noopener noreferrer" href={l.href}>
+                  {l.label}
+                </a>
+              </span>
+            ))}
+          </div>
+        )}
         <p className="text-sm font-semibold">Sold (closed, arm&apos;s-length)</p>
         {c && c.comps.length > 0 ? (
           <>
@@ -788,6 +839,100 @@ export default async function LeadReport({
           <p className="text-sm text-ink-soft">{d?.comps.note ?? c?.note ?? "No comparable sales."}</p>
         )}
         {d && <SectionNote s={d.comps} />}
+        {d?.investor && (
+          <div className="mt-5">
+            <p className="text-sm font-semibold">Investor deals nearby — flips (ARV) and company purchases (as-is price)</p>
+            {inv && (inv.flips.length > 0 || inv.buys.length > 0) ? (
+              <>
+                <div className="mt-1 overflow-x-auto print:overflow-visible">
+                  <table className="w-full min-w-[720px] text-left text-sm print:min-w-0 print:text-xs">
+                    <thead className="text-xs uppercase tracking-wide text-ink-soft">
+                      <tr>
+                        <th className="py-1">Address</th>
+                        <th>Deal</th>
+                        <th>Bought (as-is)</th>
+                        <th>Resold (renovated)</th>
+                        <th>Sq ft</th>
+                        <th>Built</th>
+                        <th>Distance</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {inv.flips.map((x) => (
+                        <tr key={`f-${x.pin}`} className="border-t border-line align-top">
+                          <td className="py-1.5 pr-2">
+                            <span className="font-semibold">{x.address}</span>
+                            <span className="block text-xs text-ink-soft">{x.municipality ?? ""}</span>
+                          </td>
+                          <td className="pr-2 text-xs">
+                            <span className="rounded bg-green-50 px-1 font-semibold text-green-900">Flip</span> held {Math.round(x.daysHeld / 30)} mo · +
+                            {Math.round((x.sellPrice / x.buyPrice - 1) * 100)}%
+                          </td>
+                          <td className="pr-2">
+                            {money(x.buyPrice)}
+                            <span className="block text-xs text-ink-soft">
+                              {x.buyDate}
+                              {x.buyType !== "arm's-length" ? ` · ${x.buyType}` : ""}
+                              {x.buyer ? ` · ${x.buyer}` : ""}
+                            </span>
+                          </td>
+                          <td className="pr-2">
+                            <strong>{money(x.sellPrice)}</strong>
+                            <span className="block text-xs text-ink-soft">
+                              {x.sellDate}
+                              {x.livingSpace ? ` · $${Math.round(x.sellPrice / x.livingSpace)}/sq ft` : ""}
+                            </span>
+                          </td>
+                          <td className="pr-2">{num(x.livingSpace)}</td>
+                          <td className="pr-2">{x.yearBuilt ?? "—"}</td>
+                          <td className="pr-2 whitespace-nowrap">{x.distanceMi} mi</td>
+                        </tr>
+                      ))}
+                      {inv.buys.map((x) => (
+                        <tr key={`b-${x.pin}`} className="border-t border-line align-top">
+                          <td className="py-1.5 pr-2">
+                            <span className="font-semibold">{x.address}</span>
+                            <span className="block text-xs text-ink-soft">{x.municipality ?? ""}</span>
+                          </td>
+                          <td className="pr-2 text-xs">
+                            <span className="rounded bg-cream px-1 font-semibold">Company buy</span>
+                            {x.buyType !== "arm's-length" ? ` · ${x.buyType}` : ""}
+                          </td>
+                          <td className="pr-2">
+                            {money(x.price)}
+                            <span className="block text-xs text-ink-soft">
+                              {x.date} · {x.buyer}
+                            </span>
+                          </td>
+                          <td className="pr-2 text-xs text-ink-soft">not resold yet</td>
+                          <td className="pr-2">{num(x.livingSpace)}</td>
+                          <td className="pr-2">{x.yearBuilt ?? "—"}</td>
+                          <td className="pr-2 whitespace-nowrap">{x.distanceMi} mi</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <ul className="mt-2 list-inside list-disc text-xs text-ink-soft">
+                  {inv.arv && <li>ARV: {inv.arv.method} → {money(inv.arv.low)}–{money(inv.arv.high)}, midpoint {money(inv.arv.mid)} (used as the worksheet&apos;s ARV).</li>}
+                  {inv.buyPrice && (
+                    <li>
+                      As-is investor price: {inv.buyPrice.method} → {money(inv.buyPrice.low)}–{money(inv.buyPrice.high)}, midpoint {money(inv.buyPrice.mid)}.
+                    </li>
+                  )}
+                  <li>
+                    Flip = same parcel resold within 18 months for 25%+ more (resale arm&apos;s-length). Company buy = an LLC/Inc/Holdings-type buyer, arm&apos;s-length
+                    or a sheriff&apos;s/foreclosure/short/lien sale. Similar size and era only, within {inv.radiusMi} mi, last {Math.round(inv.windowDays / 365)} years
+                    of loaded deeds.
+                  </li>
+                </ul>
+                <SourceTag source={d.investor.source} />
+              </>
+            ) : (
+              <SectionNote s={d.investor} />
+            )}
+          </div>
+        )}
         {d && (
           <div className="mt-5">
             <p className="text-sm font-semibold">For sale now — active, under contract &amp; pending within 1.5 mi (the seller&apos;s competition)</p>

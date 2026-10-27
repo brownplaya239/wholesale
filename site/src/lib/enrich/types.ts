@@ -175,6 +175,48 @@ export type AssessmentCheck = {
   segment: string;
 };
 
+export type InvestorRange = { low: number; mid: number; high: number; n: number; method: string };
+
+export type FlipPair = {
+  pin: string;
+  address: string;
+  municipality: string | null;
+  buyDate: string;
+  buyPrice: number;
+  buyer: string | null;
+  /** "arm's-length" or the deed's non-usable category (sheriff's sale…). */
+  buyType: string;
+  sellDate: string;
+  sellPrice: number;
+  daysHeld: number;
+  livingSpace: number | null;
+  yearBuilt: number | null;
+  distanceMi: number;
+};
+
+export type InvestorBuy = {
+  pin: string;
+  address: string;
+  municipality: string | null;
+  date: string;
+  price: number;
+  buyer: string;
+  buyType: string;
+  livingSpace: number | null;
+  yearBuilt: number | null;
+  distanceMi: number;
+};
+
+/** Flip resales (ARV) and company purchases (as-is buy price) from the deed file. */
+export type InvestorEvidence = {
+  flips: FlipPair[];
+  buys: InvestorBuy[];
+  arv: InvestorRange | null;
+  buyPrice: InvestorRange | null;
+  windowDays: number;
+  radiusMi: number;
+};
+
 export type CompsResult = {
   kind: PropertyKind;
   comps: Comp[];
@@ -230,6 +272,8 @@ export type Dossier = {
   comps: Section<CompsResult>;
   /** Optional: reports built before the cross-check existed don't have it. */
   assessment?: Section<AssessmentCheck>;
+  /** Optional: flip pairs and investor buys (reports built before it don't have it). */
+  investor?: Section<InvestorEvidence>;
   /** Optional: reports built before the MLS feed existed don't have it. */
   mls?: {
     subject: Section<MlsSubject>;

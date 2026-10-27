@@ -275,7 +275,11 @@ export function buildInsights(d: Dossier | null, lead: LeadFacts): Insights {
     const mlsOff = !d.mls || d.mls.subject.status === "not_configured";
     if (d.characteristics.bedrooms.status !== "ok" && p?.kind !== "land") {
       missing.push(
-        mlsOff ? "Bedrooms / bathrooms (connect the MLS feed, or ask the seller)" : "Bedrooms / bathrooms (no MLS record — ask the seller)"
+        mlsOff
+          ? "Bedrooms / bathrooms (connect the MLS feed, or ask the seller)"
+          : d.mls?.coverage && d.mls.coverage.level !== "good"
+            ? "Bedrooms / bathrooms (no MLS coverage here — ask the seller)"
+            : "Bedrooms / bathrooms (no MLS record — ask the seller)"
       );
     }
     if (mlsOff) missing.push("Active/pending listings nearby (connect the MLS feed)");
