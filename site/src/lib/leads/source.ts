@@ -7,6 +7,8 @@ export type LeadSource = {
   utm: Partial<Record<"source" | "medium" | "campaign" | "term" | "content", string>>;
   clickIds: Partial<Record<"gclid" | "gbraid" | "wbraid" | "fbclid" | "msclkid", string>>;
   googleAds: { campaignId: string | null; source: string | null } | null;
+  /** Outbound only: the list's signals for this owner ("Vacant · Tax delinquent"). */
+  signals?: string | null;
 };
 
 const CLICK_IDS = ["gclid", "gbraid", "wbraid", "fbclid", "msclkid"] as const;

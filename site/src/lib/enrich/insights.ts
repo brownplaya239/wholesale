@@ -23,7 +23,18 @@ export type LeadFacts = {
   baths?: string | null;
   /** False for outbound-call leads and anyone without a stored consent artifact. */
   canText?: boolean;
+  /** Outbound leads: what the call list says about the owner ("Vacant · Tax delinquent"). */
+  listSignals?: string | null;
 };
+
+/** Call-list signals that point at distress (outbound leads; internal report only). */
+const LIST_FLAGS: { re: RegExp; label: string; weight: 1 | 2; kind: DistressSignal["kind"] }[] = [
+  { re: /tax delinquent/i, label: "tax delinquent", weight: 2, kind: "situation" },
+  { re: /pre-?foreclosure/i, label: "pre-foreclosure", weight: 2, kind: "situation" },
+  { re: /inherited/i, label: "inherited", weight: 2, kind: "situation" },
+  { re: /code violation/i, label: "code violation", weight: 2, kind: "property" },
+  { re: /vacant/i, label: "vacant", weight: 2, kind: "property" },
+];
 
 const CURRENTLY_LISTED = new Set(["Active", "Active Under Contract", "Pending", "Coming Soon", "Hold"]);
 const ENDED = new Set(["Expired", "Withdrawn", "Canceled", "Cancelled"]);
@@ -93,6 +104,11 @@ export function assessDistress(d: Dossier | null, lead: LeadFacts): Distress {
   if (lead.occupancy === "Tenant-occupied") add("Tenant-occupied — possible tired landlord", 1, "situation");
   if (lead.timeline === "ASAP") add("Needs to sell ASAP", 1, "situation");
   for (const f of NOTE_FLAGS) if (lead.notes && f.re.test(lead.notes)) add(`Seller's notes mention ${f.label}`, f.weight, f.kind);
+  for (const f of LIST_FLAGS) {
+    // The seller's own "Vacant" answer already counts; don't score it twice.
+    if (f.label === "vacant" && lead.occupancy === "Vacant") continue;
+    if (lead.listSignals && f.re.test(lead.listSignals)) add(`Call list: ${f.label}`, f.weight, f.kind);
+  }
   if (d) {
     const p = d.parcel.data;
     const deeds = d.history.data ?? [];
@@ -259,10 +275,24 @@ export function buildInsights(d: Dossier | null, lead: LeadFacts): Insights {
     const mlsOff = !d.mls || d.mls.subject.status === "not_configured";
     if (d.characteristics.bedrooms.status !== "ok" && p?.kind !== "land") {
       missing.push(
-        mlsOff ? "Bedrooms / bathrooms (connect the MLS feed, or ask the seller)" : "Bedrooms / bathrooms (no MLS record — ask the seller)"
+        mlsOff
+          ? "Bedrooms / bathrooms (connect the MLS feed, or ask the seller)"
+          : d.mls?.coverage && d.mls.coverage.level !== "good"
+            ? "Bedrooms / bathrooms (no MLS coverage here — ask the seller)"
+            : "Bedrooms / bathrooms (no MLS record — ask the seller)"
       );
     }
     if (mlsOff) missing.push("Active/pending listings nearby (connect the MLS feed)");
+    else if (d.mls?.coverage && d.mls.coverage.level !== "good") {
+      missing.push("Active/pending listings nearby — the MLS feed barely covers this area; check Zillow / Realtor.com");
+    }
+    const a = d.assessment?.data;
+    const val = d.comps.data?.valuation;
+    if (a && val && (a.implied < val.low * 0.9 || a.implied > val.high * 1.1)) {
+      risks.push(
+        `Tax assessment implies ≈$${a.implied.toLocaleString()} (${a.municipality} sales ratio ${a.ratio.toFixed(2)}) vs the comp range $${val.low.toLocaleString()}–$${val.high.toLocaleString()} — find out why before pricing.`
+      );
+    }
     missing.push("Mortgage balance, liens and judgments (ask the seller; title search before contract)");
     missing.push("Zoning (no statewide NJ zoning dataset — check the municipal map)");
   } else {

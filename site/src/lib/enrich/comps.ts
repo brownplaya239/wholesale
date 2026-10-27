@@ -3,7 +3,7 @@
  * range. Pure functions: every number traces back to a recorded sale passed
  * in — nothing is generated. Tested in tests/comps.test.mts.
  */
-import type { Comp, CompsResult, PropertyKind, Valuation } from "./types";
+import type { AssessmentCheck, Comp, CompsResult, PropertyKind, Valuation } from "./types";
 
 export type Subject = {
   kind: PropertyKind;
@@ -98,10 +98,12 @@ export function isSimilar(s: Subject, c: CompCandidate): boolean {
   return true;
 }
 
-function describe(s: Subject, c: CompCandidate, distanceMi: number | null, same: boolean): string[] {
+const fmtAc = (a: number) => (a >= 10 ? a.toFixed(0) : a >= 1 ? a.toFixed(1) : a.toFixed(2));
+
+/** How the comp differs from the subject — house and lot (distance has its own column). */
+function describe(s: Subject, c: CompCandidate, same: boolean): string[] {
   const d: string[] = [];
   if (same) d.push("Same building");
-  if (distanceMi != null) d.push(`${distanceMi < 0.1 ? "<0.1" : distanceMi.toFixed(1)} mi away`);
   if (s.livingSpace && c.livingSpace) {
     const diff = c.livingSpace - s.livingSpace;
     if (Math.abs(diff) >= 50) d.push(`${diff > 0 ? "+" : "−"}${Math.abs(diff).toLocaleString()} sq ft`);
@@ -114,6 +116,10 @@ function describe(s: Subject, c: CompCandidate, distanceMi: number | null, same:
   if (s.beds && c.beds && s.kind !== "land" && s.kind !== "multifamily") {
     const diff = c.beds - s.beds;
     d.push(diff === 0 ? "Same bedrooms" : `${diff > 0 ? "+" : "−"}${Math.abs(diff)} bd`);
+  }
+  if (s.kind !== "land" && s.kind !== "condo" && s.acres && c.acres) {
+    const r = c.acres / s.acres;
+    if (r < 0.5 || r > 2) d.push(`Lot ${fmtAc(c.acres)} vs ${fmtAc(s.acres)} ac`);
   }
   if (s.kind === "multifamily" && c.dwellings) d.push(`${c.dwellings} units`);
   if (s.kind === "land" && s.acres && c.acres) d.push(`${c.acres.toFixed(2)} ac vs ${s.acres.toFixed(2)} ac`);
@@ -133,6 +139,8 @@ function scoreOf(s: Subject, c: CompCandidate, distanceMi: number | null, maxMi:
   if (c.muncode !== s.muncode) score += 8;
   if (s.kind === "multifamily" && s.dwellings && c.dwellings && c.dwellings !== s.dwellings) score += 10;
   if (s.kind === "land" && s.acres && c.acres) score += Math.abs(Math.log(c.acres / s.acres)) * 15;
+  // A house on 6 acres isn't a house on a quarter acre: prefer similar lots.
+  else if (s.kind !== "condo" && s.acres && c.acres) score += Math.min(Math.abs(Math.log(c.acres / s.acres)) * 6, 25);
   return Math.round(score * 10) / 10;
 }
 
@@ -212,6 +220,19 @@ export function valuate(s: Subject, comps: Comp[], windowDays: number, radiusMi:
       reasons.push(`Comps differ in size by ~${Math.round(percentile(gaps, 0.5) * 100)}% — per-sq-ft scaling is less reliable`);
     }
   }
+  if (s.kind !== "land" && s.kind !== "condo" && s.acres) {
+    const lots = comps.map((c) => c.acres).filter((a): a is number => a != null && a > 0).sort((a, b) => a - b);
+    const med = lots.length >= 2 ? percentile(lots, 0.5) : null;
+    if (med && s.acres >= med * 3 && s.acres - med >= 0.5) {
+      pts -= 1;
+      reasons.push(
+        `This lot (${fmtAc(s.acres)} ac) is ${Math.round(s.acres / med)}× the comps' median (${fmtAc(med)} ac) — the extra land isn't priced in; the range likely understates value`
+      );
+    } else if (med && s.acres <= med / 3) {
+      pts -= 1;
+      reasons.push(`This lot (${fmtAc(s.acres)} ac) is much smaller than the comps' median (${fmtAc(med)} ac) — the range may overstate value`);
+    }
+  }
   const spread = hi / Math.max(lo, 1);
   if (spread <= 1.25) add(1, "Tight price spread");
   else if (spread > 1.6) add(-2, "Wide price spread among comps");
@@ -252,7 +273,7 @@ export function selectComps(s: Subject, candidates: CompCandidate[], now = new D
       beds: c.beds ?? null,
       baths: c.baths ?? null,
       source: c.source ?? "deed",
-      differences: describe(s, c, distanceMi, same),
+      differences: describe(s, c, same),
       score: scoreOf(s, c, distanceMi, maxMi, ageDays, same),
       lat: c.lat,
       lng: c.lng,
@@ -323,5 +344,45 @@ export function reconcileOwnSale(
         : `This property sold for ${$} on ${sale.date} (${sale.source}) — ${sale.price < v.low ? "below" : "above"} the comp range; confidence lowered`,
     ],
     ownSale: { ...sale, inRange },
+  };
+}
+
+/**
+ * The tax-assessment cross-check: the property's assessed value scaled by
+ * what homes in the same municipality actually sold for relative to their
+ * assessments (the Division of Taxation's sales-ratio method, computed from
+ * the deed file). Independent of comp selection, so it catches a range that
+ * picked the wrong comps or missed something about the property.
+ */
+
+export function assessmentCheck(
+  assessed: number | null | undefined,
+  r: { ratio: number; p25: number; p75: number; sales: number; windowDays: number; municipality: string; segment: string } | null
+): AssessmentCheck | null {
+  if (!assessed || assessed < 10_000 || !r || r.sales < 10) return null;
+  return {
+    assessed,
+    ...r,
+    implied: round5k(assessed * r.ratio, "round"),
+    low: round5k(assessed * r.p25, "floor"),
+    high: round5k(assessed * r.p75, "ceil"),
+  };
+}
+
+/** Adds the assessment cross-check to the comp range's reasons; a big miss lowers confidence one step. */
+export function reconcileAssessment(v: Valuation, a: AssessmentCheck | null): Valuation {
+  if (!a) return v;
+  const $ = (n: number) => `$${n.toLocaleString()}`;
+  const gap = a.implied / v.mid - 1;
+  const agrees = a.implied >= v.low * 0.9 && a.implied <= v.high * 1.1;
+  return {
+    ...v,
+    confidence: agrees ? v.confidence : STEP_DOWN[v.confidence],
+    reasons: [
+      ...v.reasons,
+      agrees
+        ? `Consistent with the tax assessment (≈${$(a.implied)})`
+        : `Tax assessment implies ≈${$(a.implied)} — ${Math.abs(Math.round(gap * 100))}% ${gap > 0 ? "above" : "below"} the comp midpoint; check lot, condition and comp choice (confidence lowered)`,
+    ],
   };
 }

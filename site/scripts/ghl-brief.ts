@@ -1,10 +1,11 @@
 /**
- * npm run ghl:brief -- ../data/processed/acq/waves/W02.jsonl [more.jsonl ...] [--dry-run] [--refresh]
+ * npm run ghl:brief -- ../data/processed/acq/waves/W02.jsonl [more.jsonl ...] [--dry-run]
  *
- * Backfills the CALL BRIEF note (opener + property facts, no dollar figures)
- * on contacts already pushed. Skips contacts that already have one, so it is
- * safe to re-run. --refresh rewrites existing briefs after a script change.
- * New waves get the note from ghl:push automatically.
+ * Adds the CALL BRIEF note (opener + property facts, no dollar figures) to
+ * contacts already pushed, and rewrites any brief whose text is out of date
+ * (script change, new facts) — keeping its call HISTORY block. Unchanged
+ * briefs are left alone, so it is safe to re-run. New waves get the note
+ * from ghl:push automatically.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";
@@ -16,7 +17,6 @@ loadEnv();
 const args = process.argv.slice(2);
 const files = args.filter((a) => !a.startsWith("--"));
 const dry = args.includes("--dry-run");
-const refresh = args.includes("--refresh");
 if (!files.length || files.some((f) => !existsSync(f))) {
   console.error("usage: npm run ghl:brief -- <wave.jsonl> [...] [--dry-run]");
   process.exit(1);
@@ -41,7 +41,7 @@ async function main() {
     const contactId = ids.owners[rec.owner_id]?.contactId;
     if (!contactId) { missing++; continue; }
     try {
-      const res = await ensureCallBrief(ghl, contactId, rec, { refresh });
+      const res = await ensureCallBrief(ghl, contactId, rec);
       if (res === "added") added++;
       else if (res === "updated") updated++;
       else had++;

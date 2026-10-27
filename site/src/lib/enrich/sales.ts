@@ -141,6 +141,41 @@ export async function marketStats(
   return { status: "missing", data: null, source };
 }
 
+/**
+ * What arm's-length sales in the municipality fetched relative to their
+ * assessments (median sale price ÷ assessed value) — the Division of
+ * Taxation's sales-ratio method, from the deed file. Needs the `assessed`
+ * column (deed files loaded or re-loaded after it was added).
+ */
+export async function assessmentRatio(
+  db: Db,
+  muncode: string,
+  municipality: string,
+  kind: PropertyKind,
+  propClass: string
+): Promise<{ ratio: number; p25: number; p75: number; sales: number; windowDays: number; municipality: string; segment: string } | null> {
+  const seg = segmentFilter(kind, propClass);
+  for (const days of [365, 730]) {
+    const rows = await db.q<{ n: number; med: number | null; p25: number | null; p75: number | null }>(
+      `SELECT count(*)::int AS n,
+         percentile_cont(0.5) WITHIN GROUP (ORDER BY r) AS med,
+         percentile_cont(0.25) WITHIN GROUP (ORDER BY r) AS p25,
+         percentile_cont(0.75) WITHIN GROUP (ORDER BY r) AS p75
+       FROM (SELECT price::float / assessed AS r FROM sales
+             WHERE muncode = $1 AND usable AND price >= 25000 AND assessed >= 10000
+               AND deed_date >= CURRENT_DATE - $2::int AND deed_date <= CURRENT_DATE AND ${seg.sql}) x
+       WHERE r BETWEEN 0.2 AND 5`,
+      [muncode, days]
+    );
+    const r = rows[0];
+    if (r && r.n >= 10 && r.med) {
+      const k = (v: number | null) => Math.round(Number(v) * 1000) / 1000;
+      return { ratio: k(r.med), p25: k(r.p25), p75: k(r.p75), sales: r.n, windowDays: days, municipality, segment: seg.label };
+    }
+  }
+  return null;
+}
+
 export type Candidate = {
   pin: string;
   muncode: string;
@@ -235,4 +270,105 @@ export async function sameBuildingSales(
 export async function salesLoaded(db: Db): Promise<boolean> {
   const r = await db.q<{ x: boolean }>(`SELECT EXISTS (SELECT 1 FROM sales) AS x`);
   return Boolean(r[0]?.x);
+}
+
+/** Buyers that are companies, not people — investors (family trusts excluded). */
+export const ENTITY_SQL = String.raw`~* '\m(LLC|L L C|INC|CORP|CORPORATION|CO|COMPANY|LP|LLP|HOLDINGS?|PROPERTIES|PROPERTY|INVESTMENTS?|CAPITAL|VENTURES?|REALTY|HOMES|DEVELOPMENT|ENTERPRISES?|PARTNERS|GROUP|ACQUISITIONS?)\M'`;
+
+export type FlipRow = {
+  pin: string;
+  muncode: string;
+  location: string | null;
+  buyDate: string;
+  buyPrice: number;
+  buyer: string | null;
+  buyNuCode: string | null;
+  sellDate: string;
+  sellPrice: number;
+  livingSpace: number | null;
+  yearBuilt: number | null;
+};
+
+/**
+ * Flip pairs from the deed file: the same parcel bought and resold within
+ * 60–540 days for at least 25% more, the resale arm's-length. The resale is
+ * the renovated price (ARV evidence); the purchase is what an investor paid
+ * as-is. Both deeds must be in the loaded years.
+ */
+export async function flipPairs(db: Db, opts: { muncodes: string[]; kind: PropertyKind; propClass: string; sinceDays: number; excludePin: string }): Promise<FlipRow[]> {
+  const seg = segmentFilter(opts.kind, opts.propClass);
+  const rows = await db.q<Record<string, unknown>>(
+    `WITH s AS (SELECT * FROM sales WHERE muncode = ANY($1::text[]) AND price >= 10000 AND ${seg.sql})
+     SELECT DISTINCT ON (b.pin) b.pin, b.muncode, b.location, a.deed_date AS buy_date, a.price AS buy_price,
+            a.grantee AS buyer, a.nu_code AS buy_nu, b.deed_date AS sell_date, b.price AS sell_price,
+            COALESCE(b.living_space, a.living_space) AS living_space, COALESCE(b.year_built, a.year_built) AS year_built
+       FROM s a JOIN s b ON a.pin = b.pin
+        AND b.deed_date BETWEEN a.deed_date + 60 AND a.deed_date + 540
+      WHERE b.usable AND b.price >= 50000 AND b.price >= a.price * 1.25
+        AND b.deed_date >= CURRENT_DATE - $2::int AND b.deed_date <= CURRENT_DATE AND b.pin <> $3
+      ORDER BY b.pin, b.deed_date DESC
+      LIMIT 200`,
+    [opts.muncodes, opts.sinceDays, opts.excludePin]
+  );
+  return rows.map((r) => ({
+    pin: String(r.pin),
+    muncode: String(r.muncode),
+    location: (r.location as string) ?? null,
+    buyDate: ymd(r.buy_date) ?? "",
+    buyPrice: Number(r.buy_price),
+    buyer: (r.buyer as string) ?? null,
+    buyNuCode: (r.buy_nu as string) ?? null,
+    sellDate: ymd(r.sell_date) ?? "",
+    sellPrice: Number(r.sell_price),
+    livingSpace: r.living_space == null ? null : Number(r.living_space),
+    yearBuilt: r.year_built == null ? null : Number(r.year_built),
+  }));
+}
+
+export type InvestorBuyRow = {
+  pin: string;
+  muncode: string;
+  location: string | null;
+  date: string;
+  price: number;
+  buyer: string;
+  nuCode: string | null;
+  usable: boolean;
+  livingSpace: number | null;
+  yearBuilt: number | null;
+};
+
+/**
+ * Company buyers (LLC, Inc, Holdings…) paying real money: arm's-length
+ * sales plus sheriff's, foreclosure, short and lien sales — what investors
+ * pay for houses as-is. Family/estate and nominal transfers are excluded.
+ */
+export async function investorBuys(
+  db: Db,
+  opts: { muncodes: string[]; kind: PropertyKind; propClass: string; sinceDays: number; excludePin: string; distressCodes: number[] }
+): Promise<InvestorBuyRow[]> {
+  const seg = segmentFilter(opts.kind, opts.propClass);
+  const rows = await db.q<Record<string, unknown>>(
+    `SELECT DISTINCT ON (pin) pin, muncode, location, deed_date, price, grantee, nu_code, usable, living_space, year_built
+       FROM sales
+      WHERE muncode = ANY($1::text[]) AND price >= 25000 AND ${seg.sql}
+        AND deed_date >= CURRENT_DATE - $2::int AND deed_date <= CURRENT_DATE AND pin <> $3
+        AND grantee ${ENTITY_SQL}
+        AND (usable OR (CASE WHEN nu_code ~ '^[0-9]+$' THEN nu_code::int END) = ANY($4::int[]))
+      ORDER BY pin, deed_date DESC
+      LIMIT 300`,
+    [opts.muncodes, opts.sinceDays, opts.excludePin, opts.distressCodes]
+  );
+  return rows.map((r) => ({
+    pin: String(r.pin),
+    muncode: String(r.muncode),
+    location: (r.location as string) ?? null,
+    date: ymd(r.deed_date) ?? "",
+    price: Number(r.price),
+    buyer: String(r.grantee ?? ""),
+    nuCode: (r.nu_code as string) ?? null,
+    usable: Boolean(r.usable),
+    livingSpace: r.living_space == null ? null : Number(r.living_space),
+    yearBuilt: r.year_built == null ? null : Number(r.year_built),
+  }));
 }

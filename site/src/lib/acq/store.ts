@@ -4,6 +4,7 @@
  * and the internal suppression list (append-only; never deleted).
  */
 import { iso, type Db } from "@/lib/db";
+import type { BriefCall } from "./brief";
 import { contactNumber, type WavvCall } from "./wavv";
 
 export type CallRow = {
@@ -293,4 +294,28 @@ export async function contactSuppressedSince(db: Db, contactId: string): Promise
   );
   const v = rows[0]?.first;
   return v ? new Date(v) : null;
+}
+
+/** A contact's dials for the brief's HISTORY block: newest first, plus the total (skipped dials excluded). */
+export async function contactCallHistory(db: Db, contactId: string, limit = 4): Promise<{ calls: BriefCall[]; total: number }> {
+  const rows = await db.q<Row & { total: number }>(
+    `SELECT started_at, disposition, disposition_key, seconds, note, intel, count(*) OVER ()::int AS total
+       FROM acq_calls
+      WHERE contact_id = $1 AND ended_status IN ('done', 'failed', 'running')
+      ORDER BY COALESCE(started_at, created_at) DESC LIMIT $2`,
+    [contactId, limit]
+  );
+  const calls = rows.map((r) => {
+    const intel = (r.intel as { summary?: string; callback_requested?: string | null } | null) ?? null;
+    return {
+      startedAt: iso(r.started_at),
+      dispositionKey: (r.disposition_key as string) ?? null,
+      disposition: (r.disposition as string) ?? null,
+      seconds: r.seconds == null ? null : Number(r.seconds),
+      note: (r.note as string) ?? null,
+      summary: intel?.summary ?? null,
+      callback: intel?.callback_requested ?? null,
+    };
+  });
+  return { calls, total: rows[0]?.total ?? 0 };
 }

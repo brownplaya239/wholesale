@@ -7,16 +7,17 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { selectComps, valuate, stepsFor, type CompCandidate, type Subject } from "../src/lib/enrich/comps.ts";
 import { computeWorksheet, defaultWorksheet } from "../src/lib/enrich/worksheet.ts";
+import { investorEvidence, rangeOf, type BuyInput, type FlipInput } from "../src/lib/enrich/investor.ts";
 import { buildInsights, assignWorkflow, firstTouch } from "../src/lib/enrich/insights.ts";
 import { extractUnit } from "../src/lib/enrich/geocode.ts";
 import { pickUnit, locationUnit, kindOf } from "../src/lib/enrich/parcel.ts";
 import { parseSr1aLine, normalizeBlockLot, sr1aDate, nuLabel } from "../src/lib/sr1a.ts";
 import { dedupeKey } from "../src/lib/leads/store.ts";
 import { parseSource } from "../src/lib/leads/source.ts";
-import { buildDossier, mergeClosings, recentOwnSale, withSellerFacts } from "../src/lib/enrich/dossier.ts";
+import { buildDossier, mergeClosings, mlsCoverage, recentOwnSale, withSellerFacts } from "../src/lib/enrich/dossier.ts";
 import { mlsKind, mlsNearby, mlsSubject, streetKey, testFeeds, type MlsListing } from "../src/lib/enrich/mls.ts";
 import { municipalityAt } from "../src/lib/enrich/parcel.ts";
-import { reconcileOwnSale, isSimilar } from "../src/lib/enrich/comps.ts";
+import { assessmentCheck, reconcileAssessment, reconcileOwnSale, isSimilar } from "../src/lib/enrich/comps.ts";
 import { answersUpdate, enrichedEmail } from "../src/lib/leads/reportEmail.ts";
 import { annotate, imageUrl, verifyImage } from "../src/lib/leads/images.ts";
 import { assessDistress } from "../src/lib/enrich/insights.ts";
@@ -655,4 +656,93 @@ test("slack routing: per-type channel, falls back to SLACK_WEBHOOK_URL, 'off' mu
   assert.equal(slackText("⚠️ COMPLIANCE: Jo — dialed_suppressed_contact", "• detail"), "*⚠️ COMPLIANCE: Jo — dialed_suppressed_contact*\n• detail");
   // The web-lead body already opens with its subject: no duplicate header.
   assert.equal(slackText("🔥 LEAD: Jo — 1 Main St", "🔥 LEAD: Jo — 1 Main St\nPhone: 732"), "🔥 LEAD: Jo — 1 Main St\nPhone: 732");
+});
+
+test("SR1A assessed value is parsed (it feeds the tax-assessment cross-check)", () => {
+  const line = "".padEnd(663, " ").split("");
+  const put = (start: number, v: string) => v.split("").forEach((ch, i) => (line[start + i] = ch));
+  put(0, "1325"); put(33, "U"); put(46, "000455000"); put(73, "000260100");
+  put(338, "260415"); put(350, "00029"); put(359, "00010"); put(626, "2  ");
+  assert.equal(parseSr1aLine(line.join(""), NOW)!.assessed, 260_100);
+  put(73, "000000000");
+  assert.equal(parseSr1aLine(line.join(""), NOW)!.assessed, null);
+});
+
+test("big lot vs small-lot comps: lot shown, similar lots preferred, range flagged as understated", () => {
+  const s = subject({ acres: 6.07, livingSpace: null });
+  const pool = [1, 2, 3, 4].map((i) => cand(i, { acres: 0.2 })).concat([cand(5, { acres: 4.5 })]);
+  const r = selectComps(s, pool, NOW);
+  assert.equal(r.comps[0].pin, "1300_9_5", "the 4.5-acre sale ranks first");
+  assert.ok(r.comps.find((c) => c.pin === "1300_9_1")!.differences.includes("Lot 0.20 vs 6.1 ac"));
+  assert.ok(!r.comps.some((c) => c.differences.some((d) => / mi away$/.test(d))), "distance has its own column");
+  assert.ok(r.valuation!.reasons.some((x) => /This lot \(6\.1 ac\) is \d+× the comps' median/.test(x)));
+});
+
+test("tax-assessment cross-check: needs 10+ sales; a miss lowers confidence, agreement says so", () => {
+  const ratio = { ratio: 1.25, p25: 1.1, p75: 1.4, sales: 40, windowDays: 365, municipality: "VINELAND CITY", segment: "1–4 family homes" };
+  assert.equal(assessmentCheck(260_100, { ...ratio, sales: 9 }), null);
+  assert.equal(assessmentCheck(null, ratio), null);
+  const a = assessmentCheck(260_100, ratio)!;
+  assert.equal(a.implied, 325_000);
+  assert.deepEqual([a.low, a.high], [285_000, 365_000]);
+  const v = { low: 185_000, mid: 210_000, high: 245_000, method: "m", confidence: "medium" as const, reasons: [] };
+  const off = reconcileAssessment(v, a);
+  assert.equal(off.confidence, "low");
+  assert.match(off.reasons[0], /Tax assessment implies ≈\$325,000 — 55% above the comp midpoint/);
+  const on = reconcileAssessment({ ...v, low: 300_000, mid: 320_000, high: 340_000 }, a);
+  assert.equal(on.confidence, "medium");
+  assert.match(on.reasons[0], /Consistent with the tax assessment/);
+});
+
+test("MLS coverage: a feed that saw almost none of the deed sales is 'thin'", () => {
+  const none = { status: "missing" as const, data: [], source: null };
+  assert.deepEqual(mlsCoverage(none, { deed: 294, mls: 1, merged: 0 }), { level: "thin", closings: 1, deeds: 294 });
+  assert.equal(mlsCoverage(none, { deed: 200, mls: 30, merged: 90 })!.level, "good");
+  assert.equal(mlsCoverage(none, { deed: 200, mls: 0, merged: 0 })!.level, "none");
+  assert.equal(mlsCoverage({ status: "not_configured", data: null, source: null }, { deed: 200, mls: 0, merged: 0 }), undefined);
+});
+
+test("outbound leads: call-list signals count toward distress", () => {
+  const d = assessDistress(null, { ...FACTS, listSignals: "Vacant · Tax delinquent · Owned 21y" });
+  assert.equal(d.level, "high");
+  assert.deepEqual(d.signals.map((x) => x.label), ["Call list: tax delinquent", "Call list: vacant"]);
+  assert.equal(assessDistress(null, { ...FACTS, occupancy: "Vacant", listSignals: "Vacant" }).signals.length, 1, "vacant not double-counted");
+});
+
+test("flip pairs give ARV, company buys give the as-is price; far/unlike houses dropped", () => {
+  const s = { kind: "single_family" as const, lat: LAT, lng: LNG, livingSpace: 1500, yearBuilt: 1960 };
+  const flip = (i: number, over: Partial<FlipInput> = {}): FlipInput => ({
+    pin: `f${i}`, location: `${i} ELM ST`, municipality: "TEST TWP", lat: offset(0.3 + i * 0.1), lng: LNG,
+    buyDate: "2025-03-01", buyPrice: 150_000 + i * 5_000, buyer: "ACME HOMES LLC", buyType: "arm's-length",
+    sellDate: "2025-11-01", sellPrice: 300_000 + i * 10_000, livingSpace: 1500, yearBuilt: 1955, ...over,
+  });
+  const buy = (i: number, over: Partial<BuyInput> = {}): BuyInput => ({
+    pin: `b${i}`, location: `${i} OAK ST`, municipality: "TEST TWP", lat: offset(0.5), lng: LNG, date: "2026-02-01",
+    price: 160_000 + i * 5_000, buyer: "QUICK CASH LLC", buyType: "arm's-length", livingSpace: 1450, yearBuilt: 1950, ...over,
+  });
+  const ev = investorEvidence(
+    s,
+    [flip(1), flip(2), flip(3), flip(4, { livingSpace: 3000 }), flip(5, { lat: offset(6) })],
+    [buy(1), buy(2, { pin: "f1", date: "2025-03-01" })],
+    730
+  );
+  assert.deepEqual(ev.flips.map((f) => f.pin), ["f1", "f2", "f3"], "nearest first; oversized and 6-mi flips dropped");
+  assert.equal(ev.radiusMi, 4, "only 2 buys inside 2 mi, so that search widened to 4");
+  assert.equal(ev.flips[0].daysHeld, 245);
+  assert.ok(ev.arv && ev.arv.n === 3 && /per sq ft/.test(ev.arv.method));
+  assert.equal(ev.arv!.mid, 320_000);
+  // buys b1 + f1's own purchase (listed once) + flips f2/f3's purchases = 4
+  assert.equal(ev.buyPrice!.n, 4);
+  assert.ok(ev.buyPrice!.mid >= 150_000 && ev.buyPrice!.mid <= 175_000);
+  assert.equal(investorEvidence(s, [flip(1)], [], 730).arv, null, "one flip is shown but makes no range");
+  assert.equal(rangeOf([{ price: 1, livingSpace: null }], null, "x"), null);
+});
+
+test("worksheet ARV comes from flips when there are any", () => {
+  const d = { comps: { data: { valuation: { low: 185_000, mid: 210_000, high: 245_000, confidence: "medium" } } }, characteristics: { livingSpace: { value: null, source: null } }, parcel: { data: null } } as never;
+  assert.equal(defaultWorksheet(d, null).inputs.arv, 245_000);
+  const withFlips = { ...(d as object), investor: { status: "ok", data: { arv: { low: 290_000, mid: 320_000, high: 350_000, n: 4, method: "m" } } } } as never;
+  const ws = defaultWorksheet(withFlips, null);
+  assert.equal(ws.inputs.arv, 320_000);
+  assert.match(ws.basis.arv!, /Median flip resale nearby \(4 renovated resales/);
 });
