@@ -642,3 +642,17 @@ test("alert recipients: team list only on team-flagged emails, deduped, owner li
   );
   assert.deepEqual(emailRecipients(false, { to: "not-an-email, ", team: "" }), []);
 });
+
+test("slack routing: per-type channel, falls back to SLACK_WEBHOOK_URL, 'off' mutes; subject on top", async () => {
+  const { slackWebhook, slackText } = await import("../src/lib/leads/notify.ts");
+  const env = { SLACK_WEBHOOK_URL: "https://hooks/default", SLACK_COMPLIANCE_WEBHOOK_URL: " https://hooks/compliance ", SLACK_WARM_WEBHOOK_URL: "OFF" };
+  assert.equal(slackWebhook("compliance", env), "https://hooks/compliance");
+  assert.equal(slackWebhook("hot", env), "https://hooks/default");
+  assert.equal(slackWebhook("leads", { ...env, SLACK_LEADS_WEBHOOK_URL: "" }), "https://hooks/default");
+  assert.equal(slackWebhook("warm", env), null);
+  assert.equal(slackWebhook(undefined, env), "https://hooks/default");
+  assert.equal(slackWebhook("hot", {}), null);
+  assert.equal(slackText("⚠️ COMPLIANCE: Jo — dialed_suppressed_contact", "• detail"), "*⚠️ COMPLIANCE: Jo — dialed_suppressed_contact*\n• detail");
+  // The web-lead body already opens with its subject: no duplicate header.
+  assert.equal(slackText("🔥 LEAD: Jo — 1 Main St", "🔥 LEAD: Jo — 1 Main St\nPhone: 732"), "🔥 LEAD: Jo — 1 Main St\nPhone: 732");
+});

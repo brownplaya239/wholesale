@@ -174,7 +174,7 @@ export async function POST(req: NextRequest) {
   }
 
   const [results, ghlResult] = await Promise.all([
-    fanOut(subject, text, payload, `leadId=${leadId} stage=full`, undefined, { team: true }),
+    fanOut(subject, text, payload, `leadId=${leadId} stage=full`, undefined, { team: true, slack: "leads" }),
     deliverToGhl({ leadId, name, phone, address, reportUrl: persisted ? reportUrl(leadId) : undefined }),
   ]);
   if (ghlResult) results.push(ghlResult);
@@ -308,7 +308,9 @@ async function handleDetails(body: Partial<LeadSubmission>) {
     `Re: ${leadSubject(subjectName, subjectAddress)}`,
     text,
     { source: "housesoldnj.com", stage: "details", leadId, ...patch },
-    `leadId=${leadId} stage=details`
+    `leadId=${leadId} stage=details`,
+    undefined,
+    { slack: "leads" }
   );
 
   if (db && addressChanged) {
