@@ -159,6 +159,22 @@ export type Valuation = {
   ownSale?: { price: number; date: string; source: string; inRange: boolean };
 };
 
+/** Assessed value × the municipality's median sale-to-assessment ratio. */
+export type AssessmentCheck = {
+  assessed: number;
+  /** Median sale price ÷ assessed value, arm's-length sales in the municipality. */
+  ratio: number;
+  p25: number;
+  p75: number;
+  sales: number;
+  windowDays: number;
+  implied: number;
+  low: number;
+  high: number;
+  municipality: string;
+  segment: string;
+};
+
 export type CompsResult = {
   kind: PropertyKind;
   comps: Comp[];
@@ -212,10 +228,17 @@ export type Dossier = {
   distress: Section<{ indicators: string[] }>;
   market: Section<MarketStats>;
   comps: Section<CompsResult>;
+  /** Optional: reports built before the cross-check existed don't have it. */
+  assessment?: Section<AssessmentCheck>;
   /** Optional: reports built before the MLS feed existed don't have it. */
   mls?: {
     subject: Section<MlsSubject>;
     nearby: Section<MlsListing[]>;
+    /**
+     * How well the MLS feed covers this area, judged by its closings against
+     * the deed file's: "thin" means an empty listings table proves nothing.
+     */
+    coverage?: { level: "good" | "thin" | "none"; closings: number; deeds: number };
   };
   /** Google Street View availability and imagery date. */
   streetView?: { status: "ok" | "none" | "not_configured" | "error"; date: string | null };

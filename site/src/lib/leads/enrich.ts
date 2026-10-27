@@ -6,6 +6,7 @@
 import { getDb } from "@/lib/db";
 import { buildDossier, withSellerFacts } from "@/lib/enrich/dossier";
 import { assignWorkflow, buildInsights, type LeadFacts } from "@/lib/enrich/insights";
+import type { LeadSource } from "./source";
 import type { Dossier } from "@/lib/enrich/types";
 import { fanOut } from "./notify";
 import { enrichedEmail } from "./reportEmail";
@@ -26,6 +27,7 @@ export function leadFacts(l: LeadRecord): LeadFacts {
     beds: l.beds,
     baths: l.baths,
     canText: l.consent?.checked === true,
+    listSignals: (l.source as LeadSource).signals ?? null,
   };
 }
 

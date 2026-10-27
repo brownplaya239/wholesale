@@ -141,6 +141,41 @@ export async function marketStats(
   return { status: "missing", data: null, source };
 }
 
+/**
+ * What arm's-length sales in the municipality fetched relative to their
+ * assessments (median sale price ÷ assessed value) — the Division of
+ * Taxation's sales-ratio method, from the deed file. Needs the `assessed`
+ * column (deed files loaded or re-loaded after it was added).
+ */
+export async function assessmentRatio(
+  db: Db,
+  muncode: string,
+  municipality: string,
+  kind: PropertyKind,
+  propClass: string
+): Promise<{ ratio: number; p25: number; p75: number; sales: number; windowDays: number; municipality: string; segment: string } | null> {
+  const seg = segmentFilter(kind, propClass);
+  for (const days of [365, 730]) {
+    const rows = await db.q<{ n: number; med: number | null; p25: number | null; p75: number | null }>(
+      `SELECT count(*)::int AS n,
+         percentile_cont(0.5) WITHIN GROUP (ORDER BY r) AS med,
+         percentile_cont(0.25) WITHIN GROUP (ORDER BY r) AS p25,
+         percentile_cont(0.75) WITHIN GROUP (ORDER BY r) AS p75
+       FROM (SELECT price::float / assessed AS r FROM sales
+             WHERE muncode = $1 AND usable AND price >= 25000 AND assessed >= 10000
+               AND deed_date >= CURRENT_DATE - $2::int AND deed_date <= CURRENT_DATE AND ${seg.sql}) x
+       WHERE r BETWEEN 0.2 AND 5`,
+      [muncode, days]
+    );
+    const r = rows[0];
+    if (r && r.n >= 10 && r.med) {
+      const k = (v: number | null) => Math.round(Number(v) * 1000) / 1000;
+      return { ratio: k(r.med), p25: k(r.p25), p75: k(r.p75), sales: r.n, windowDays: days, municipality, segment: seg.label };
+    }
+  }
+  return null;
+}
+
 export type Candidate = {
   pin: string;
   muncode: string;

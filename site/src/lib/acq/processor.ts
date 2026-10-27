@@ -11,8 +11,9 @@ import { site } from "@/config/site";
 import type { Db } from "@/lib/db";
 import { enrichLead } from "@/lib/leads/enrich";
 import { fanOut, reportUrl, type SlackKind } from "@/lib/leads/notify";
-import { saveFullLead } from "@/lib/leads/store";
+import { saveFullLead, updateDetails, type DetailsPatch } from "@/lib/leads/store";
 import { assignWorkflow } from "@/lib/enrich/insights";
+import { refreshBriefHistory } from "./brief";
 import { extractIntel, planIntel } from "./callIntel";
 import { alertViolations, auditCall, trainedCallers, type Flag } from "./compliance";
 import { addBusinessDays, dispositionKey, planDisposition, type ContactState, type OppState, type Plan } from "./dispositions";
@@ -30,6 +31,7 @@ import {
   setIntel,
   setTranscript,
   upsertCall,
+  contactCallHistory,
   contactSuppressedSince,
   priorDials,
   type CallRow,
@@ -54,6 +56,19 @@ export function callUrl(callId: string): string {
 async function alert(subject: string, lines: (string | false | null | undefined)[], tag: string, opts: { team?: boolean; slack: SlackKind }): Promise<void> {
   const text = lines.filter(Boolean).join("\n");
   await fanOut(subject, text, { stage: "acq_alert", subject, text }, tag, undefined, opts).catch((e) => console.error(`ACQ ALERT FAILURE ${String(e)}`));
+}
+
+/**
+ * Rewrites the HISTORY block of the contact's call brief so the next caller
+ * sees what the last dials heard. Best effort: a failure never blocks the call.
+ */
+async function updateBrief(db: Db, ghl: Ghl, contactId: string, callId: string): Promise<void> {
+  try {
+    const h = await contactCallHistory(db, contactId);
+    await refreshBriefHistory(ghl, contactId, h.calls, h.total);
+  } catch (e) {
+    console.warn(`ACQ BRIEF HISTORY FAILURE call=${callId} ${String(e).slice(0, 200)}`);
+  }
 }
 
 // ------------------------------------------------------------ webhooks --
@@ -266,6 +281,7 @@ export async function processEnded(db: Db, id: string): Promise<string> {
     const d = dims(ctx, call);
     await finishEnded(db, id, { status: "done", dispositionKey: key, conversation: plan.conversation, plan, flags, dims: d });
     console.info(`ACQ ENDED DONE call=${id} disposition=${key} opp=${oppId ?? "none"} flags=${flags.map((f) => f.code).join(",") || "none"}`);
+    if (!plan.dndAll) await updateBrief(db, ghl, ctx.contact.id, id);
 
     const name = [ctx.contact.firstName, ctx.contact.lastName].filter(Boolean).join(" ") || "Contact";
     const violations = flags.filter((f) => f.severity === "violation");
@@ -290,7 +306,7 @@ export async function processEnded(db: Db, id: string): Promise<string> {
         contactUrl(ctx.contact.id),
       ], `call=${id} notify`, { team: plan.notify.level === "hot" || plan.notify.level === "booked", slack: plan.notify.level === "warm" ? "warm" : "hot" });
     }
-    if (plan.hotReport) await hotLeadReport(db, ctx, oppId, id).catch((e) => console.error(`HOT REPORT FAILURE call=${id} ${String(e)}`));
+    if (plan.hotReport) await hotLeadReport(db, ctx, oppId, call).catch((e) => console.error(`HOT REPORT FAILURE call=${id} ${String(e)}`));
     return "done";
   } catch (err) {
     console.error(`ACQ ENDED FAILURE call=${id} ${String(err)}`);
@@ -299,12 +315,45 @@ export async function processEnded(db: Db, id: string): Promise<string> {
   }
 }
 
+const TIMELINE_FROM_GHL: Record<string, string> = {
+  "ASAP (under 30 days)": "ASAP",
+  "1-3 months": "1–3 months",
+  "3-6 months": "3+ months",
+  "6+ months": "3+ months",
+  "Just exploring": "Just curious",
+};
+const OCCUPANCY_FROM_GHL: Record<string, string> = { "Owner-occupied": "I live there", "Tenant-occupied": "Tenant-occupied", Vacant: "Vacant" };
+
+/**
+ * What the caller captured, in the lead record's terms: the report then shows
+ * the seller's situation instead of "Not answered", and the repair budget and
+ * distress level use it.
+ */
+export function callDetails(opp: Record<string, unknown>, callNote: string | null): DetailsPatch {
+  const s = (k: string) => (opp[k] == null ? "" : String(opp[k]).trim());
+  const notes = [
+    s("Motivation") && `Motivation: ${s("Motivation")}`,
+    s("Asking Price") && `Asking / expectations: ${s("Asking Price")}`,
+    s("Decision Makers") && `Decision makers: ${s("Decision Makers")}`,
+    s("Mortgage and Liens") && `Mortgage / liens: ${s("Mortgage and Liens")}`,
+    s("Next Action") && `Next action: ${s("Next Action")}${s("Next Follow Up") ? ` (${s("Next Follow Up").slice(0, 10)})` : ""}`,
+    callNote?.trim() && `Caller's note: ${callNote.trim()}`,
+  ].filter(Boolean);
+  const patch: DetailsPatch = {};
+  if (TIMELINE_FROM_GHL[s("Seller Timeline")]) patch.timeline = TIMELINE_FROM_GHL[s("Seller Timeline")];
+  if (s("Property Condition")) patch.condition = s("Property Condition");
+  if (OCCUPANCY_FROM_GHL[s("Occupancy")]) patch.occupancy = OCCUPANCY_FROM_GHL[s("Occupancy")];
+  if (notes.length) patch.notes = `From the call:\n${notes.join("\n")}`;
+  return patch;
+}
+
 /**
  * A hot / booked outbound seller gets the same internal property report as a
  * web lead (comps, MLS history, flood, photo check, buy/assign/list
  * worksheet). The site lead record is marked as having NO text consent.
  */
-async function hotLeadReport(db: Db, ctx: Ctx, oppId: string | null, callId: string): Promise<void> {
+async function hotLeadReport(db: Db, ctx: Ctx, oppId: string | null, call: CallRow): Promise<void> {
+  const callId = call.id;
   const address = String(ctx.fields["Primary Property"] ?? "").trim();
   const phone = digits(ctx.contact.phone);
   if (!address || !phone) return;
@@ -317,14 +366,25 @@ async function hotLeadReport(db: Db, ctx: Ctx, oppId: string | null, callId: str
     phone: `(${phone.slice(0, 3)}) ${phone.slice(3, 6)}-${phone.slice(6)}`,
     address: address.includes("NJ") ? address : `${address}, NJ`,
     placeId: null,
-    source: { channel: "outbound", landingPath: null, referrer: null, utm: { campaign: String(ctx.fields["Source List"] ?? "") }, clickIds: {}, googleAds: null },
+    source: {
+      channel: "outbound",
+      landingPath: null,
+      referrer: null,
+      utm: { campaign: String(ctx.fields["Source List"] ?? "") },
+      clickIds: {},
+      googleAds: null,
+      signals: (ctx.fields["Signals"] as string) || null,
+    },
     consent: { checked: false, channel: "outbound_call", note: "Outbound cold call — no call/text consent artifact. Never text.", callId, ghlContactId: ctx.contact.id },
     workflow: assignWorkflow(null, { name, timeline: null, priority: null, condition: null, occupancy: null, createdAt, canText: false }),
   });
   if (oppId) {
     await ctx.ghl.updateOpportunity(oppId, { customFields: cf(ctx.r.opportunity, { "Report URL": reportUrl(saved.lead.id) }) }).catch(() => {});
   }
-  if (saved.outcome === "created") await enrichLead(saved.lead.id, { notify: true, reason: "new" });
+  if (saved.outcome !== "created") return;
+  const details = callDetails(ctx.opp?.fields ?? {}, call.note);
+  if (Object.keys(details).length) await updateDetails(db, saved.lead.id, details).catch((e) => console.error(`HOT REPORT DETAILS FAILURE call=${callId} ${String(e)}`));
+  await enrichLead(saved.lead.id, { notify: true, reason: "new" });
 }
 
 // ------------------------------------------------- transcript + intel --

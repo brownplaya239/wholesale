@@ -183,6 +183,7 @@ def owner_record(o: pd.Series, props: pd.DataFrame, wave: str, op: str = "upsert
         "primary_property_id": o["primary_property_id"],
         "contact": {
             "first_name": o["first_name"], "last_name": o["last_name"], "full_name": o["full_name"],
+            "owner2": clean(o.get("owner2")) or "",
             "owner_type": o["owner_type"], "mailing_address": o["mailing_address"],
             "mailing_city": o["mailing_city"], "mailing_state": o["mailing_state"],
             "mailing_zip": o["mailing_zip"],

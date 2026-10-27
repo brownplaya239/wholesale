@@ -3,6 +3,7 @@
  * name, push a released owner (contact + property records + association +
  * opportunity), apply phone/lane patches, and push a web lead.
  */
+import { ensureCallBrief } from "./brief";
 import { cfValue, Ghl, GhlError, type CustomFieldValue, type GhlContact, type GhlField, type GhlObjectField } from "./ghl";
 import {
   COHORT_LABELS,
@@ -18,6 +19,9 @@ import {
   type PipelineKey,
   type PropField,
 } from "./schema";
+
+// The caller's brief lives in ./brief; re-exported for the scripts and tests.
+export { CALL_BRIEF_MARKER, callBrief, ensureCallBrief } from "./brief";
 
 /** A live Property-object field: the bare key records use, its type and options. */
 export type ObjField = { name: string; key: string; dataType: string; options: { key?: string; label: string }[] };
@@ -194,6 +198,8 @@ export type WaveContact = {
   first_name: string;
   last_name: string;
   full_name: string;
+  /** Second owner on the vendor record (spouse, sibling…), when there is one. */
+  owner2?: string | null;
   owner_type: string;
   mailing_address: string;
   mailing_city: string;
@@ -489,78 +495,6 @@ export function queueTag(ownerId: string, env = process.env.ACQ_QUEUE_TAGS): str
   let h = 0;
   for (const ch of ownerId) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   return tags[h % tags.length];
-}
-
-export const CALL_BRIEF_MARKER = "CALL BRIEF";
-
-const titleCase = (s: string) => s.toLowerCase().replace(/\b([a-z])/g, (m) => m.toUpperCase()).replace(/\b(\d+)(St|Nd|Rd|Th)\b/g, (_m, d, x) => d + x.toLowerCase());
-
-/**
- * The caller's side panel for one owner: the opener with their names filled
- * in plus what the call should cover. Deliberately has NO dollar figures
- * (value, equity, sale price) and no tax/lien wording — callers never quote
- * numbers or raise how the list was built. Sumeet sees the numbers on the
- * Property record.
- */
-export function callBrief(rec: WaveRecord): string {
-  const c = rec.contact;
-  const props = rec.properties;
-  const p = props.find((x) => x.property_id === rec.primary_property_id) ?? props[0];
-  const street = p ? titleCase(String(p.address)) : titleCase(c.primary_property ?? "");
-  const where = p ? `${street}, ${titleCase(String(p.city ?? ""))} ${p.zip ?? ""}`.trim() + (p.county ? ` (${titleCase(String(p.county))} County)` : "") : street;
-  const entity = c.owner_type !== "Individual";
-  const greet = entity ? `Hi, may I speak with whoever handles the property for ${c.full_name}?` : `Hi, is this ${titleCase(c.first_name || c.full_name)}?`;
-  const lines = [
-    `${CALL_BRIEF_MARKER} — ${where}`,
-    "",
-    `OPENER: "${greet} This is ___ calling from HouseSoldNJ — we're local real estate investors, and our calls are recorded. I'm calling about ${street} — is that still yours?"`,
-    "",
-  ];
-  if (p) {
-    const facts: string[] = [];
-    if (p.beds) facts.push(`${p.beds} bd`);
-    if (p.baths) facts.push(`${p.baths} ba`);
-    if (p.sqft) facts.push(`${Math.round(Number(p.sqft)).toLocaleString("en-US")} sqft`);
-    if (p.units && Number(p.units) > 1) facts.push(`${p.units} units`);
-    if (p.acres) facts.push(`${p.acres} acres`);
-    if (p.year_built) facts.push(`built ${Math.round(Number(p.year_built))}`);
-    if (p.ownership_years) {
-      const bought = typeof p.last_sale_date === "string" ? ` (since ${p.last_sale_date.slice(0, 4)})` : "";
-      facts.push(`owned ~${Math.round(Number(p.ownership_years))} yrs${bought}`);
-    }
-    if (facts.length) lines.push(`PROPERTY: ${facts.join(" · ")}`);
-    if (p.vacant === true) lines.push("OCCUPANCY: flagged vacant — confirm: \"Is anyone living there right now?\"");
-    else if (p.absentee === true || p.owner_occupied === false)
-      lines.push(`OCCUPANCY: owner doesn't live there (mail goes to ${titleCase(c.mailing_city ?? "")}, ${c.mailing_state ?? ""}) — ask who's living there now.`);
-    else if (p.owner_occupied === true) lines.push("OCCUPANCY: owner appears to live there.");
-  }
-  if (props.length > 1) {
-    const others = props.filter((x) => x !== p).map((x) => titleCase(`${x.address}, ${x.city ?? ""}`));
-    lines.push(`ALSO OWNS: ${others.slice(0, 5).join("; ")}${others.length > 5 ? ` (+${others.length - 5} more)` : ""}`);
-  }
-  lines.push(
-    "",
-    "COVER: confirm owner → what's got them thinking about it → condition/repairs → timeline → who lives there → other decision makers → roughly what they'd need → book Sumeet or a dated callback.",
-    "NEVER: a price, value, offer or range · back taxes, liens or how we found them · keep going after \"stop calling\" (→ DNC).",
-  );
-  return lines.join("\n");
-}
-
-/**
- * Adds the call brief unless the contact already has one (safe to re-run).
- * refresh: rewrite an existing brief whose text is out of date (script change).
- */
-export async function ensureCallBrief(ghl: Ghl, contactId: string, rec: WaveRecord, opts: { refresh?: boolean } = {}): Promise<"added" | "updated" | "kept"> {
-  const body = callBrief(rec);
-  const notes = await ghl.listNotes(contactId);
-  const mine = notes.filter((n) => (n.body ?? "").replace(/<[^>]+>/g, "").trimStart().startsWith(CALL_BRIEF_MARKER));
-  if (!mine.length) {
-    await ghl.addNote(contactId, body);
-    return "added";
-  }
-  if (!opts.refresh || mine.every((n) => n.body === body)) return "kept";
-  for (const n of mine) if (n.body !== body) await ghl.updateNote(contactId, n.id, body);
-  return "updated";
 }
 
 export async function pushOwner(ghl: Ghl, r: Resolved, rec: WaveRecord, ids: IdMap, opts: { coldSmsDnd: boolean }): Promise<PushResult> {

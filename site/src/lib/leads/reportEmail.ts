@@ -151,6 +151,7 @@ function model(lead: LeadRecord, d: Dossier, workflow: Workflow | null, reason: 
     ] as [string, string | null][]
   ).filter((x): x is [string, string] => Boolean(x[1]));
   return {
+    assess: d.assessment?.data ?? null,
     subject: `Re: ${leadSubject(lead.name, lead.addressOriginal)}`,
     intro: reason === "address_changed" ? "Updated property report — the seller edited the address/unit." : "Property report",
     title: g?.standardized ?? lead.addressCurrent,
@@ -244,6 +245,8 @@ function toText(m: Model): string {
       : `Value: no comp range — ${m.compsNote ?? "not enough comparable sales"}`,
     m.v?.ownSale &&
       `Own sale: ${m.v.ownSale.date} ${money(m.v.ownSale.price)} (${m.v.ownSale.source}) — ${m.v.ownSale.inRange ? "consistent with the range" : m.v.ownSale.price < m.v.low ? "BELOW the range" : "ABOVE the range"}`,
+    m.assess &&
+      `Tax-assessment check: ≈${money(m.assess.implied)} (assessed ${money(m.assess.assessed)} × ${m.assess.ratio.toFixed(2)}, ${m.assess.municipality} sales ratio, ${m.assess.sales} sales)`,
     m.numbers &&
       `Max cash offer (flip math): ${money(m.numbers.maxCash)} · Assignment offer: ${money(m.numbers.assignment)} · Seller's net if listed as-is: ${money(m.numbers.listingNet)}`,
     m.numbers && `Repairs assumed: ${money(m.numbers.repairs)} (${m.numbers.repairBasis})`,
@@ -352,6 +355,12 @@ function toHtml(m: Model): string {
     }
   } else {
     est.push(`<p style="margin:0;font-size:14px">No comp range — ${esc(m.compsNote ?? "not enough comparable sales")}.</p>`);
+  }
+  if (m.assess) {
+    const a = m.assess;
+    est.push(
+      `<p style="margin:8px 0 0;font-size:14px">Tax-assessment check: <strong>≈${money(a.implied)}</strong> <span style="color:${C.soft}">(assessed ${money(a.assessed)} × ${a.ratio.toFixed(2)}, the median sale-to-assessment ratio of ${a.sales} ${esc(a.municipality)} sales)</span></p>`
+    );
   }
   if (m.numbers) {
     const n = m.numbers;

@@ -28,6 +28,8 @@ export type SaleRow = {
   deedDate: string | null;
   recordedDate: string | null;
   price: number | null;
+  /** Total assessed value on the tax list at the time of sale. */
+  assessed: number | null;
   usable: boolean;
   nuCode: string | null;
   propClass: string | null;
@@ -87,6 +89,7 @@ export function parseSr1aLine(line: string, now = new Date()): SaleRow | null {
   const verified = num(f(line, 46, 9));
   const reported = num(f(line, 37, 9));
   const price = verified && verified > 0 ? verified : reported;
+  const assessed = num(f(line, 73, 9));
   const deedDate = sr1aDate(f(line, 338, 6), now);
   const yb = num(f(line, 652, 4));
   const ls = num(f(line, 656, 7));
@@ -101,6 +104,7 @@ export function parseSr1aLine(line: string, now = new Date()): SaleRow | null {
     deedDate,
     recordedDate: sr1aDate(f(line, 344, 6), now),
     price: price ?? null,
+    assessed: assessed && assessed > 0 ? assessed : null,
     // U = usable (arm's-length) per the Division's classification.
     usable: uType === "U" || (uType === "" && (nu === "" || Number(nu) === 0)),
     nuCode: nu || null,
@@ -188,8 +192,13 @@ export type IngestResult = {
 
 const BATCH = 1000;
 
-/** Idempotent: re-running inserts only records not already present. */
-export async function insertSales(db: Db, rows: SaleRow[], sourceFile: string): Promise<number> {
+/**
+ * Idempotent: re-running inserts only records not already present, and fills
+ * in the assessed value on rows loaded before that column existed.
+ */
+export async function insertSales(db: Db, all: SaleRow[], sourceFile: string): Promise<number> {
+  // A batch may not touch the same key twice (ON CONFLICT DO UPDATE).
+  const rows = [...new Map(all.map((r) => [r.recKey, r])).values()];
   let inserted = 0;
   for (let i = 0; i < rows.length; i += BATCH) {
     const b = rows.slice(i, i + BATCH);
@@ -197,14 +206,15 @@ export async function insertSales(db: Db, rows: SaleRow[], sourceFile: string): 
       `WITH ins AS (
          INSERT INTO sales (rec_key, muncode, block, lot, qual, pin, deed_date, recorded_date,
            price, usable, nu_code, prop_class, year_built, living_space, location, grantor,
-           grantee, source_file)
-         SELECT *, $18::text FROM unnest($1::text[], $2::text[], $3::text[], $4::text[],
+           grantee, assessed, source_file)
+         SELECT *, $19::text FROM unnest($1::text[], $2::text[], $3::text[], $4::text[],
            $5::text[], $6::text[], $7::date[], $8::date[], $9::bigint[], $10::boolean[],
            $11::text[], $12::text[], $13::smallint[], $14::int[], $15::text[], $16::text[],
-           $17::text[])
-         ON CONFLICT (rec_key) DO NOTHING
-         RETURNING 1
-       ) SELECT count(*)::int AS n FROM ins`,
+           $17::text[], $18::bigint[])
+         ON CONFLICT (rec_key) DO UPDATE SET assessed = EXCLUDED.assessed
+           WHERE sales.assessed IS NULL AND EXCLUDED.assessed IS NOT NULL
+         RETURNING (xmax = 0) AS fresh
+       ) SELECT count(*) FILTER (WHERE fresh)::int AS n FROM ins`,
       [
         b.map((r) => r.recKey),
         b.map((r) => r.muncode),
@@ -223,6 +233,7 @@ export async function insertSales(db: Db, rows: SaleRow[], sourceFile: string): 
         b.map((r) => r.location),
         b.map((r) => r.grantor),
         b.map((r) => r.grantee),
+        b.map((r) => r.assessed),
         sourceFile,
       ]
     );

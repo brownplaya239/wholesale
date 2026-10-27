@@ -15,6 +15,7 @@ import { alertViolations, auditCall, callWindowFlags, isFederalHoliday, trainedC
 import { matchWavvSignature, verifyWavvSignature } from "../src/lib/acq/wavv.ts";
 import { formatIntel, planIntel, type CallIntel } from "../src/lib/acq/callIntel.ts";
 import { Ghl } from "../src/lib/acq/ghl.ts";
+import { ensureCallBrief, historyBlock, noteText, refreshBriefHistory, withHistory } from "../src/lib/acq/brief.ts";
 import { callBrief, queueTag, cf, matchFields, matchStages, pushOwner, resetResolveCache, resolve, toFieldValue, type IdMap, type WaveRecord } from "../src/lib/acq/sync.ts";
 import {
   CONTACT_FIELDS,
@@ -531,7 +532,10 @@ test("call brief: opener with names filled, property facts, no dollar figures", 
   assert.match(b, /^CALL BRIEF — 10 Oak St/);
   assert.match(b, /calling from HouseSoldNJ — we're local real estate investors, and our calls are recorded\. I'm calling about 10 Oak St/);
   assert.ok(!/\$|300,?000|equity/i.test(b), "no value/equity numbers for callers to quote");
-  assert.ok(!/tax/i.test(b.split("NEVER:")[0]), "taxes only appear in the never-list");
+  assert.ok(!/tax|lien|foreclos/i.test(b.split("NEVER:")[0]), "taxes/liens only appear in the never-list");
+  assert.match(b, /OCCUPANCY: may be empty/);
+  assert.match(b, /VOICEMAIL \(live, your own voice\): "Hi, this is ___ calling from HouseSoldNJ, about 10 Oak St\. You can reach us at \(\d{3}\) \d{3}-\d{4}\. Thank you\."/);
+  assert.match(b, /"Are you agents\?" → "Yes — Sumeet Sancheti, who owns HouseSoldNJ, is a licensed agent/);
   resetResolveCache();
   const mock = mockGhl();
   const ghl = new Ghl({ token: "t", locationId: "LOC", fetchImpl: mock.fetchImpl, minIntervalMs: 0 });
@@ -539,6 +543,55 @@ test("call brief: opener with names filled, property facts, no dollar figures", 
   const res = await pushOwner(ghl, r, waveRecord(), { owners: {}, properties: {} }, { coldSmsDnd: true });
   const note = mock.calls.find((c) => c.method === "POST" && c.path === `/contacts/${res.contactId}/notes`);
   assert.ok(note && String(note.body!.body).startsWith("CALL BRIEF"), "push adds the brief");
+});
+
+test("call brief: owner who lives at another of their properties, co-owner, angles", () => {
+  const rec = waveRecord();
+  rec.contact = { ...rec.contact, first_name: "SHEY", last_name: "JONES", full_name: "SHEY JONES", owner2: "MARK JONES", mailing_address: "1301 1ST AVE", mailing_city: "ASBURY PARK", mailing_state: "NJ" };
+  rec.properties = [
+    { property_id: "prop1", address: "642 CHURCH ST", city: "ASBURY PARK", zip: "07712", county: "MONMOUTH", asset_class: "residential", absentee: true, beds: 3, baths: 1, year_built: 1920, last_sale_date: "2006-03-01", property_type: "Single Family Residential" },
+    { property_id: "prop2", address: "1301 1st Avenue", city: "ASBURY PARK", zip: "07712", county: "MONMOUTH", asset_class: "residential" },
+  ];
+  const b = callBrief(rec, new Date("2026-10-27T15:00:00Z"));
+  assert.match(b, /^CALL BRIEF — 642 Church St, Asbury Park 07712 \(Monmouth County\)/);
+  assert.match(b, /ASK FOR: Shey Jones · co-owner Mark Jones is also a decision maker/);
+  assert.match(b, /OPENER: "Hi, is this Shey\?/);
+  assert.match(b, /PROPERTY: single family · 3 bd · 1 ba · built 1920 · owned ~20 yrs \(since 2006\)/);
+  assert.match(b, /OCCUPANCY: owner lives at 1301 1st Avenue \(another of theirs\) — ask who's living at 642 Church St now\./);
+  assert.match(b, /ALSO OWNS: 1301 1st Avenue, Asbury Park/);
+  assert.match(b, /ANGLE: likely a rental/);
+  assert.match(b, /ANGLE: owns 2 properties/);
+});
+
+test("call brief: HISTORY block is rewritten in place and survives a script refresh", async () => {
+  const brief = callBrief(waveRecord());
+  const h1 = historyBlock([{ startedAt: "2026-10-20T21:40:00Z", dispositionKey: "NO_ANSWER", disposition: "No Answer", seconds: 0, note: null }], 1);
+  const once = withHistory(brief, h1);
+  assert.match(once, /HISTORY \(1 dial so far\):\n• Tue, Oct 20, 5:40p — No Answer\n\nCOVER:/);
+  const h2 = historyBlock([
+    { startedAt: "2026-10-22T15:05:00Z", dispositionKey: "CALLBACK", disposition: "Callback Requested", seconds: 130, note: "wife decides", summary: "Owner open to selling next spring; wife must agree.", callback: "after 5pm Thursday" },
+    { startedAt: "2026-10-20T21:40:00Z", dispositionKey: "NO_ANSWER", disposition: "No Answer", seconds: 0, note: null },
+  ], 2);
+  const twice = withHistory(once, h2);
+  assert.equal(twice.match(/HISTORY \(/g)!.length, 1, "one block, replaced");
+  assert.match(twice, /• Thu, Oct 22, 11:05a — Callback Requested \(2m 10s\): Owner open to selling next spring; wife must agree\. · callback asked: after 5pm Thursday/);
+  assert.equal(withHistory(twice, ""), brief, "removing the block restores the brief exactly");
+  assert.equal(noteText("<p>CALL BRIEF — x</p><p>A &amp; B</p>"), "CALL BRIEF — x\nA & B");
+
+  // ensureCallBrief: a stale brief (old opener) is rewritten, its HISTORY kept.
+  const updates: string[] = [];
+  const stale = withHistory(brief.replace(" calling from HouseSoldNJ — we're local real estate investors, and our calls are recorded.", "."), h2);
+  const fake = {
+    listNotes: async () => [{ id: "n1", body: stale }],
+    updateNote: async (_c: string, _id: string, body: string) => void updates.push(body),
+    addNote: async () => assert.fail("must not add a second brief"),
+  } as unknown as Ghl;
+  assert.equal(await ensureCallBrief(fake, "c1", waveRecord()), "updated");
+  assert.equal(updates[0], withHistory(brief, h2));
+  const current = { ...fake, listNotes: async () => [{ id: "n1", body: updates[0] }] } as unknown as Ghl;
+  assert.equal(await ensureCallBrief(current, "c1", waveRecord()), "kept");
+  assert.equal(await refreshBriefHistory(current, "c1", [], 0).then(() => updates.length), 2, "history refresh rewrites the note");
+  assert.equal(updates[1], brief);
 });
 
 test("wave push: an existing consented web-lead contact keeps its lane and consent", async () => {
@@ -741,4 +794,19 @@ test("a miss on a closed-out contact (double-dial leg processed after Not Intere
   }
   const live = planDisposition("VOICEMAIL", { at: TUE, human: false, seconds: 9, dialed: "8562221111" }, { lane: "power", attempts: 1, conversations: 0, phones: ["8562221111"], invalidPhones: [], propertyCount: 1 }, null);
   assert.ok(live.contactFields["Next Call Due"], "power lane still gets its next call date");
+});
+
+test("hot outbound report: the caller's qualification becomes the lead's answers", async () => {
+  const { callDetails } = await import("../src/lib/acq/processor.ts");
+  const d = callDetails(
+    { "Seller Timeline": "ASAP (under 30 days)", "Property Condition": "Needs major repairs", Occupancy: "Vacant", Motivation: "moving to FL", "Asking Price": "around 300", "Decision Makers": "him + sister", "Next Follow Up": "2026-10-29T00:00:00Z" },
+    "  roof leaks  "
+  );
+  assert.deepEqual(d, {
+    timeline: "ASAP",
+    condition: "Needs major repairs",
+    occupancy: "Vacant",
+    notes: "From the call:\nMotivation: moving to FL\nAsking / expectations: around 300\nDecision makers: him + sister\nCaller's note: roof leaks",
+  });
+  assert.deepEqual(callDetails({ Occupancy: "Unknown" }, null), {}, "unknowns aren't written as answers");
 });

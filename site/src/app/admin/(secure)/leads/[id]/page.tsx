@@ -136,8 +136,8 @@ const MLS_OFF = "Comes from your MLS — connect the MOMLS/CJMLS data feed to en
 
 function ListingTable({ rows, nearby }: { rows: MlsListing[]; nearby?: boolean }) {
   return (
-    <div className="mt-1 overflow-x-auto">
-      <table className="w-full min-w-[640px] text-left text-sm">
+    <div className="mt-1 overflow-x-auto print:overflow-visible">
+      <table className="w-full min-w-[640px] text-left text-sm print:min-w-0 print:text-xs">
         <thead className="text-xs uppercase tracking-wide text-ink-soft">
           <tr>
             {nearby && <th className="py-1">Address</th>}
@@ -189,6 +189,36 @@ function ListingTable({ rows, nearby }: { rows: MlsListing[]; nearby?: boolean }
   );
 }
 
+function Stat({ label, value, sub, tone }: { label: string; value: React.ReactNode; sub?: React.ReactNode; tone?: "warn" | "bad" | "good" }) {
+  const ring = tone === "bad" ? "border-red-300 bg-red-50" : tone === "warn" ? "border-amber-300 bg-amber-50" : tone === "good" ? "border-green-200 bg-green-50" : "border-line bg-white";
+  return (
+    <div className={`rounded-xl border p-3 ${ring}`}>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-soft">{label}</p>
+      <p className="mt-0.5 text-base font-bold leading-snug">{value}</p>
+      {sub && <p className="mt-0.5 text-xs text-ink-soft">{sub}</p>}
+    </div>
+  );
+}
+
+const median = (xs: number[]) => {
+  const v = xs.filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
+  return v.length ? (v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2) : null;
+};
+const fmtAc = (a: number | null | undefined) => (a == null ? "—" : a >= 10 ? a.toFixed(0) : a >= 1 ? a.toFixed(1) : a.toFixed(2));
+/** A $1 / $100 deed is a family, estate or quitclaim transfer — not a market price. */
+const nominal = (price: number | null | undefined) => price != null && price < 1000;
+const zip5 = (z: string | null | undefined) => (z ?? "").slice(0, 5);
+
+/** Public listing sites, for when the MLS feed doesn't cover the area (or to see photos). */
+function listingSearchLinks(zip: string, address: string | null) {
+  return [
+    address ? { label: "This house on Zillow", href: `https://www.zillow.com/homes/${encodeURIComponent(address)}_rb/` } : null,
+    zip ? { label: `Zillow · for sale in ${zip}`, href: `https://www.zillow.com/homes/${zip}_rb/` } : null,
+    zip ? { label: `Realtor.com · ${zip}`, href: `https://www.realtor.com/realestateandhomes-search/${zip}` } : null,
+    zip ? { label: `Redfin · ${zip}`, href: `https://www.redfin.com/zipcode/${zip}` } : null,
+  ].filter(Boolean) as { label: string; href: string }[];
+}
+
 export default async function LeadReport({
   params,
   searchParams,
@@ -217,6 +247,19 @@ export default async function LeadReport({
   const v = c?.valuation ?? null;
   const src = lead.source as LeadSource;
   const ws = d ? defaultWorksheet(d, lead.condition) : null;
+  const a = d?.assessment?.data ?? null;
+  const coverage = mls?.coverage ?? null;
+  const actives = mls?.nearby.data ?? [];
+  const activeMedian = median(actives.map((l) => l.listPrice ?? Number.NaN));
+  const activeDom = median(actives.map((l) => l.daysOnMarket ?? Number.NaN));
+  const thinMls = coverage?.level === "thin" || coverage?.level === "none";
+  const zip = zip5(g?.postal);
+  const searchLinks = listingSearchLinks(zip, g?.standardized ?? null);
+  const assessOff = Boolean(a && v && (a.implied < v.low * 0.9 || a.implied > v.high * 1.1));
+  const outbound = src.channel === "outbound";
+  const lastSale = p?.lastSale ?? null;
+  const ch = d?.characteristics ?? null;
+  const loadedFiles = d?.history.source?.name.match(/\(([^)]+)\)/)?.[1] ?? null;
   const tel = `tel:+1${lead.phone.replace(/\D/g, "")}`;
   const sms = `sms:+1${lead.phone.replace(/\D/g, "")}`;
 
@@ -286,6 +329,89 @@ export default async function LeadReport({
         </p>
       )}
 
+      {d && (
+        <section className="rounded-2xl border border-line bg-cream/40 p-4 break-inside-avoid" aria-label="Diligence snapshot">
+          <h2 className="text-sm font-bold uppercase tracking-wide text-ink-soft">Diligence snapshot</h2>
+          <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
+            <Stat
+              label="Value — comparable sales"
+              value={v ? `${money(v.low)} – ${money(v.high)}` : "No comp range"}
+              sub={v ? `${v.confidence} confidence · ${c!.comps.length} sales · ${c!.windowDays} days` : d.comps.note}
+              tone={v ? (v.confidence === "low" ? "warn" : undefined) : "warn"}
+            />
+            <Stat
+              label="Value — tax-assessment check"
+              value={a ? `≈ ${money(a.implied)}` : "—"}
+              sub={
+                a
+                  ? `${money(a.assessed)} assessed × ${a.ratio.toFixed(2)} (median of ${a.sales} ${a.municipality} sales)${assessOff ? " — disagrees with the comps" : ""}`
+                  : (d.assessment?.note ?? "Not computed on this report — re-run enrichment")
+              }
+              tone={assessOff ? "warn" : a && v ? "good" : undefined}
+            />
+            <Stat
+              label={`Town market (${d.market.data ? `${d.market.data.windowDays} days` : "deeds"})`}
+              value={d.market.data ? `${money(d.market.data.medianPrice)} median` : "—"}
+              sub={d.market.data ? `${d.market.data.sales} sales · ${d.market.data.medianPpsf ? `$${d.market.data.medianPpsf}/sq ft · ` : ""}${d.market.data.municipality}` : d.market.note}
+            />
+            <Stat
+              label="For sale nearby (MLS)"
+              value={mls?.nearby.status === "not_configured" ? "MLS not connected" : `${actives.length} active / pending`}
+              sub={
+                thinMls
+                  ? `MLS feed barely covers this area (${coverage!.closings} closings vs ${coverage!.deeds} deed sales) — check Zillow/Realtor in section 5`
+                  : actives.length
+                    ? `median ask ${money(activeMedian)}${activeDom != null ? ` · median ${Math.round(activeDom)} days on market` : ""}`
+                    : `None in ZIP ${zip || "?"} within 1.5 mi`
+              }
+              tone={thinMls ? "warn" : undefined}
+            />
+            <Stat
+              label="Ownership"
+              value={lastSale?.date ? `Since ${lastSale.date.slice(0, 4)} (${new Date().getFullYear() - Number(lastSale.date.slice(0, 4))} yrs)` : "Transfer date unknown"}
+              sub={[
+                lastSale?.price != null ? (nominal(lastSale.price) ? `${money(lastSale.price)} transfer — family/estate, not a sale` : `bought for ${money(lastSale.price)}`) : null,
+                p?.owner.absentee ? `absentee — bills mail to ${p.owner.mailing}` : p?.owner.mailing ? "tax bills mail to the property" : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+              tone={nominal(lastSale?.price) ? "warn" : undefined}
+            />
+            <Stat
+              label="Property"
+              value={[
+                ch?.bedrooms.value != null ? `${ch.bedrooms.value} bd / ${ch.bathrooms.value ?? "?"} ba` : null,
+                ch?.livingSpace.value ? `${num(ch.livingSpace.value)} sq ft` : "sq ft unknown",
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+              sub={[
+                p ? p.propClassLabel : null,
+                ch?.lotAcres.value ? `${fmtAc(ch.lotAcres.value)} ac lot` : null,
+                ch?.yearBuilt.value ? `built ${ch.yearBuilt.value}` : null,
+                d.flood.data?.zone ? `flood ${d.flood.data.zone}${d.flood.data.sfha ? " (SFHA)" : ""}` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+              tone={d.flood.data?.sfha ? "warn" : undefined}
+            />
+            <Stat
+              label={outbound ? "From the call" : "Seller said"}
+              value={[lead.timeline, lead.condition, lead.occupancy].filter(Boolean).join(" · ") || "Not answered yet"}
+              sub={
+                lead.notes
+                  ? lead.notes.replace(/^From the call:\s*/, "").split("\n")[0]
+                  : distress && distress.signals.length
+                    ? `Distress: ${distress.signals[0].label}`
+                    : undefined
+              }
+              tone={distress?.level === "high" ? "bad" : distress?.level === "some" ? "warn" : undefined}
+            />
+            <Stat label="Next step" value={workflow.firstTouch} sub={workflow.label} />
+          </div>
+        </section>
+      )}
+
       <div className="grid gap-5 lg:grid-cols-2">
         {/* 1 */}
         <Card n={1} title="Lead status & seller">
@@ -320,11 +446,15 @@ export default async function LeadReport({
             <FactRow
               label="Consent"
               value={
-                <span className="font-normal">
-                  {lead.consent.checked ? "✔ Agreed to calls/texts" : "✘ Not given"} · {et(lead.consent.timestamp as string)} · IP{" "}
-                  {String(lead.consent.ip ?? "")}
-                  <span className="block text-xs text-ink-soft">“{String(lead.consent.text ?? "")}”</span>
-                </span>
+                outbound ? (
+                  <span className="font-normal">✘ None — {String(lead.consent.note ?? "outbound cold call. Never text.")}</span>
+                ) : (
+                  <span className="font-normal">
+                    {lead.consent.checked ? "✔ Agreed to calls/texts" : "✘ Not given"} · {et(lead.consent.timestamp as string)} · IP{" "}
+                    {String(lead.consent.ip ?? "")}
+                    <span className="block text-xs text-ink-soft">“{String(lead.consent.text ?? "")}”</span>
+                  </span>
+                )
               }
             />
           </dl>
@@ -496,7 +626,18 @@ export default async function LeadReport({
               <FactRow label="Last year's taxes" value={money(p?.lastYearTaxes)} source={d.parcel.source} status={p?.lastYearTaxes != null ? "ok" : "missing"} />
               <FactRow
                 label="Last sale on tax list"
-                value={p?.lastSale ? `${p.lastSale.date ?? "undated"} · ${money(p.lastSale.price)}${p.lastSale.deedBook ? ` · deed ${p.lastSale.deedBook}/${p.lastSale.deedPage}` : ""}` : "—"}
+                value={
+                  p?.lastSale ? (
+                    <>
+                      {`${p.lastSale.date ?? "undated"} · ${money(p.lastSale.price)}${p.lastSale.deedBook ? ` · deed ${p.lastSale.deedBook}/${p.lastSale.deedPage}` : ""}`}
+                      {nominal(p.lastSale.price) && (
+                        <span className="block text-xs font-normal text-amber-800">Nominal price — a family, estate or quitclaim transfer, not a market sale.</span>
+                      )}
+                    </>
+                  ) : (
+                    "—"
+                  )
+                }
                 source={d.parcel.source}
                 status={p?.lastSale ? "ok" : "missing"}
               />
@@ -523,7 +664,10 @@ export default async function LeadReport({
                   </tbody>
                 </table>
               ) : (
-                <p className="mt-1 text-sm text-ink-soft">None in the loaded deed years.</p>
+                <p className="mt-1 text-sm text-ink-soft">
+                  None in the deed files loaded so far{loadedFiles ? ` (${loadedFiles})` : ""} — older transfers need earlier years loaded; the tax list&apos;s
+                  last sale is on the left.
+                </p>
               )}
               <div className="mt-1">
                 <SourceTag source={d.history.source} />
@@ -552,11 +696,12 @@ export default async function LeadReport({
       </Card>
 
       {/* 5 */}
-      <Card n={5} title="Comparable sales">
+      <Card n={5} title="Comparable sales — sold, then for sale">
+        <p className="text-sm font-semibold">Sold (closed, arm&apos;s-length)</p>
         {c && c.comps.length > 0 ? (
           <>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] text-left text-sm">
+            <div className="mt-1 overflow-x-auto print:overflow-visible">
+              <table className="w-full min-w-[760px] text-left text-sm print:min-w-0 print:text-xs">
                 <thead className="text-xs uppercase tracking-wide text-ink-soft">
                   <tr>
                     <th className="py-1">Address</th>
@@ -566,17 +711,49 @@ export default async function LeadReport({
                     <th>$/sq ft</th>
                     <th>Bd / ba</th>
                     <th>Built</th>
+                    <th>Lot</th>
                     <th>Distance</th>
                     <th>Differences</th>
                   </tr>
                 </thead>
                 <tbody>
+                  <tr className="border-t-2 border-ink/20 bg-cream/60 align-top font-semibold">
+                    <td className="py-1.5 pr-2">
+                      This property
+                      <span className="block text-xs font-normal text-ink-soft">{p ? `${p.municipality} · ${p.pin}` : ""}</span>
+                    </td>
+                    <td className="pr-2 text-xs font-normal">{lastSale?.date ? `${lastSale.date}${nominal(lastSale.price) ? " (nominal)" : ""}` : "—"}</td>
+                    <td className="pr-2">{v ? `${money(v.mid)} est.` : "—"}</td>
+                    <td className="pr-2">{num(ch?.livingSpace.value)}</td>
+                    <td className="pr-2">{v && ch?.livingSpace.value ? `$${Math.round(v.mid / ch.livingSpace.value)}` : "—"}</td>
+                    <td className="pr-2 whitespace-nowrap">
+                      {ch?.bedrooms.value != null || ch?.bathrooms.value != null ? `${ch?.bedrooms.value ?? "?"} / ${ch?.bathrooms.value ?? "?"}` : "—"}
+                    </td>
+                    <td className="pr-2">{ch?.yearBuilt.value ?? "—"}</td>
+                    <td className="pr-2 whitespace-nowrap">{ch?.lotAcres.value ? `${fmtAc(ch.lotAcres.value)} ac` : "—"}</td>
+                    <td className="pr-2">—</td>
+                    <td className="text-xs font-normal text-ink-soft">Subject</td>
+                  </tr>
                   {c.comps.map((x) => (
                     <tr key={x.pin} className="border-t border-line align-top">
                       <td className="py-1.5 pr-2">
-                        <span className="font-semibold">{x.address}</span>
+                        <a
+                          className="font-semibold underline decoration-line underline-offset-2"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          href={
+                            x.lat != null && x.lng != null
+                              ? `https://www.google.com/maps/search/?api=1&query=${x.lat},${x.lng}`
+                              : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${x.address}, ${x.municipality ?? ""}, NJ`)}`
+                          }
+                        >
+                          {x.address}
+                        </a>
                         <span className="block text-xs text-ink-soft">
-                          {x.municipality ?? ""} · {x.source === "mls" ? "MLS closing" : x.source === "deed+mls" ? `deed + MLS · ${x.pin}` : x.pin}
+                          {x.municipality ?? ""} ·{" "}
+                          <span className={`rounded px-1 font-semibold ${x.source === "deed" ? "bg-cream" : "bg-blue-50 text-blue-900"}`}>
+                            {x.source === "mls" ? "MLS closing" : x.source === "deed+mls" ? "deed + MLS" : "deed"}
+                          </span>
                         </span>
                       </td>
                       <td className="whitespace-nowrap pr-2">{x.saleDate}</td>
@@ -589,18 +766,21 @@ export default async function LeadReport({
                       </td>
                       <td className="pr-2 whitespace-nowrap">{x.beds != null || x.baths != null ? `${x.beds ?? "?"} / ${x.baths ?? "?"}` : "—"}</td>
                       <td className="pr-2">{x.yearBuilt ?? "—"}</td>
-                      <td className="pr-2">{x.distanceMi != null ? `${x.distanceMi} mi` : "—"}</td>
-                      <td className="text-xs text-ink-soft">{x.differences.join(" · ")}</td>
+                      <td className="pr-2 whitespace-nowrap">{x.acres ? `${fmtAc(x.acres)} ac` : "—"}</td>
+                      <td className="pr-2 whitespace-nowrap">{x.distanceMi != null ? `${x.distanceMi} mi` : "—"}</td>
+                      {/* Reports built before distance got its own column repeated it here. */}
+                      <td className="text-xs text-ink-soft">{x.differences.filter((t) => !/ mi away$/.test(t)).join(" · ") || "Similar"}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
             <p className="mt-2 text-xs text-ink-soft">
-              Search: {c.steps.map((s) => `${s.label} (${s.qualifying})`).join(" → ")}.{" "}
+              Search: {c.steps.map((st) => `${st.label} (${st.qualifying})`).join(" → ")}.{" "}
               {c.pool
                 ? `Pool: ${c.pool.deed} arm's-length deed sales${c.pool.merged ? ` (${c.pool.merged} matched to MLS closings for beds/baths)` : ""}${c.pool.mls ? ` + ${c.pool.mls} MLS-only closings` : ""}.`
-                : "Closed arm's-length sales only."}
+                : "Closed arm's-length sales only."}{" "}
+              Family, estate, foreclosure and other non-usable deeds are excluded. Prices are as recorded — no adjustments.
             </p>
             <SourceTag source={d!.comps.source} />
           </>
@@ -610,15 +790,44 @@ export default async function LeadReport({
         {d && <SectionNote s={d.comps} />}
         {d && (
           <div className="mt-5">
-            <p className="text-sm font-semibold">Active & pending listings nearby — the seller's competition</p>
-            {mls?.nearby.data?.length ? (
+            <p className="text-sm font-semibold">For sale now — active, under contract &amp; pending within 1.5 mi (the seller&apos;s competition)</p>
+            {thinMls && (
+              <p className="mt-1 rounded-lg bg-amber-50 px-2 py-1 text-xs text-amber-900">
+                The MLS feed barely covers this area — it saw {coverage!.closings} of the {coverage!.deeds} sales in the deed file over two years
+                {p ? ` (${p.county} County)` : ""}. An empty or short list here does NOT mean there&apos;s no competition: check the public sites below.
+              </p>
+            )}
+            {actives.length ? (
               <>
-                <ListingTable rows={mls.nearby.data} nearby />
-                <p className="mt-1 text-xs text-ink-soft">{mls.nearby.note} Asking prices, not sales — not used in the value range.</p>
-                <SourceTag source={mls.nearby.source} />
+                <p className="mt-1 text-xs">
+                  <strong>{actives.length}</strong> listed · median ask <strong>{money(activeMedian)}</strong>
+                  {activeDom != null && (
+                    <>
+                      {" "}
+                      · median <strong>{Math.round(activeDom)}</strong> days on market
+                    </>
+                  )}
+                  {(() => {
+                    const ppsf = median(actives.map((l) => (l.listPrice && l.sqft ? l.listPrice / l.sqft : Number.NaN)));
+                    return ppsf ? ` · median ask $${Math.round(ppsf)}/sq ft` : "";
+                  })()}
+                </p>
+                <ListingTable rows={actives} nearby />
+                <p className="mt-1 text-xs text-ink-soft">{mls!.nearby.note} Asking prices, not sales — not used in the value range.</p>
+                <SourceTag source={mls!.nearby.source} />
               </>
             ) : (
               <SourceTag source={null} status={mls?.nearby.status ?? "not_configured"} note={mls?.nearby.note ?? MLS_OFF} />
+            )}
+            {searchLinks.length > 0 && (
+              <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs print:hidden">
+                <span className="text-ink-soft">Public listings:</span>
+                {searchLinks.map((l) => (
+                  <a key={l.href} className="underline" target="_blank" rel="noopener noreferrer" href={l.href}>
+                    {l.label}
+                  </a>
+                ))}
+              </p>
             )}
           </div>
         )}
@@ -650,6 +859,23 @@ export default async function LeadReport({
               </ul>
             </div>
             <div className="space-y-3 text-sm">
+              {a ? (
+                <div className={`rounded-lg p-3 ${assessOff ? "bg-amber-100/70" : "bg-white"}`}>
+                  <p className="font-semibold">Tax-assessment cross-check: ≈ {money(a.implied)}</p>
+                  <p>
+                    Assessed {money(a.assessed)} × {a.ratio.toFixed(2)} — what {a.sales} arm&apos;s-length {a.segment} sales in {a.municipality} fetched per
+                    assessed dollar (last {a.windowDays} days; middle half {a.p25.toFixed(2)}–{a.p75.toFixed(2)} → {money(a.low)}–{money(a.high)}).
+                  </p>
+                  <p className="mt-1 text-xs">
+                    {assessOff
+                      ? `Outside the comp range — independent of comp selection, so check the lot (${ch?.lotAcres.value ? `${fmtAc(ch.lotAcres.value)} ac` : "size unknown"}), condition and whether the comps are really alike.`
+                      : "Agrees with the comp range."}
+                  </p>
+                  <SourceTag source={d!.assessment!.source} />
+                </div>
+              ) : (
+                d?.assessment && <SectionNote s={d.assessment} />
+              )}
               {d?.market.data ? (
                 <div className="rounded-lg bg-white p-3">
                   <p className="font-semibold">
