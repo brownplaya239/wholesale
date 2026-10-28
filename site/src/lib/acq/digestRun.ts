@@ -7,7 +7,7 @@
 import type { Db } from "@/lib/db";
 import { callerNamer, eodReport, etDate, morningDigest, type DigestCtx } from "./digest";
 import { callUrl, contactUrl, drain, reconcile } from "./processor";
-import { recentCalls } from "./store";
+import { openCallbacks, recentCalls } from "./store";
 
 export type DigestKind = "morning" | "eod";
 
@@ -33,8 +33,10 @@ export async function runDigest(
     sync.drained = await drain(db, 60).catch((e) => ({ error: String(e).slice(0, 200) }));
   }
   const x: DigestCtx = { contactUrl, callUrl, callerName: callerNamer() };
-  const calls = await recentCalls(db, kind === "eod" ? 3 : 40, 5000, { plan: true });
-  const text = kind === "eod" ? eodReport(calls, day, x, { recovered }) : morningDigest(calls, day, x);
+  // Morning: 4 days covers yesterday + the pipeline check (Mon reaches back to
+  // Fri); callbacks come from their own uncapped query over the full 40 days.
+  const calls = await recentCalls(db, kind === "eod" ? 3 : 4, 20_000, { plan: true });
+  const text = kind === "eod" ? eodReport(calls, day, x, { recovered }) : morningDigest(calls, day, x, await openCallbacks(db, 40));
   const posted = opts.dry ? null : await postSlack(text);
   // Always leave a trace: a silent success and a missing webhook look the same otherwise.
   console.info(`ACQ DIGEST kind=${kind} day=${day} calls=${calls.length} posted=${posted ? `${posted.ok} ${posted.detail}` : "dry-run"}`);

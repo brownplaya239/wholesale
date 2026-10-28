@@ -754,6 +754,21 @@ test("digest: morning agenda lists due and overdue callbacks; a later call clear
   assert.match(m, /🌤 \*Warm Owner\*.*Open to selling next spring/);
 });
 
+test("digest: morning agenda keeps callbacks older than the row-capped recent window", () => {
+  const cb = (id: string, contactId: string, started: string, due: string) =>
+    row({ id, ...at(started), userId: "K", contactId, dispositionKey: "CALLBACK", plan: { tasks: [{ title: "Callback", due }] }, dims: { name: `Owner ${id}` } });
+  // Only yesterday is in `recent`; the two old callbacks come from openCallbacks.
+  const recent = [row({ id: "y1", ...at("2026-10-15T15:30:00Z"), contactId: "c3", dispositionKey: "NO_ANSWER" })];
+  const callbacks = [
+    cb("old", "c1", "2026-09-28T15:00:00Z", "2026-10-02T14:00:00Z"),
+    cb("hit", "c3", "2026-09-30T15:00:00Z", "2026-10-05T14:00:00Z"),
+  ];
+  const m = morningDigest(recent, "2026-10-16", X, callbacks);
+  assert.match(m, /Overdue callbacks \(1\)[\s\S]*Owner old.*was due Fri, Oct 2/);
+  assert.ok(!/Owner hit/.test(m), "a newer call in recent clears it");
+  assert.ok(!/Owner old/.test(morningDigest(recent, "2026-10-16", X)), "without openCallbacks it was invisible");
+});
+
 test("call intel: a callback the caller didn't disposition becomes a task", () => {
   const i = intel({ callback_requested: "Tuesday after 5" });
   assert.equal(planIntel(i, "NOT_INTERESTED", "c1").callbackTask?.title, "Callback promised: Tuesday after 5");
