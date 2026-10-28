@@ -273,15 +273,37 @@ export async function listSuppression(db: Db): Promise<{ createdAt: string; kind
   }));
 }
 
+const listColumns = (plan: boolean) =>
+  `id, direction, phone, contact_id, user_id, campaign_id, started_at, ended_at, seconds, outcome, human,
+   disposition, disposition_key, note, dims, conversation, ${plan ? "plan" : "NULL::jsonb AS plan"}, flags, ended_status,
+   ended_attempts, ended_error, recorded, transcript_status, transcript_attempts, NULL AS transcript,
+   NULL AS wavv_summary, intel, intel_status, intel_error`;
+
 export async function recentCalls(db: Db, days: number, limit = 500, opts: { plan?: boolean } = {}): Promise<CallRow[]> {
   const rows = await db.q<Row>(
-    `SELECT id, direction, phone, contact_id, user_id, campaign_id, started_at, ended_at, seconds, outcome, human,
-            disposition, disposition_key, note, dims, conversation, ${opts.plan ? "plan" : "NULL::jsonb AS plan"}, flags, ended_status,
-            ended_attempts, ended_error, recorded, transcript_status, transcript_attempts, NULL AS transcript,
-            NULL AS wavv_summary, intel, intel_status, intel_error
+    `SELECT ${listColumns(Boolean(opts.plan))}
        FROM acq_calls WHERE COALESCE(started_at, created_at) > now() - ($1::text || ' days')::interval
        ORDER BY COALESCE(started_at, created_at) DESC LIMIT $2`,
     [String(days), limit]
+  );
+  return rows.map(toCall);
+}
+
+/**
+ * Open callbacks: each contact's latest outbound call over `days`, kept only
+ * when that call is a CALLBACK (a later call means it was handled). Not capped
+ * by a row limit, so a callback set weeks ago still shows at ~2k dials/day.
+ */
+export async function openCallbacks(db: Db, days: number): Promise<CallRow[]> {
+  const rows = await db.q<Row>(
+    `SELECT * FROM (
+       SELECT DISTINCT ON (COALESCE(contact_id, phone, id)) ${listColumns(true)}
+         FROM acq_calls
+        WHERE direction IS DISTINCT FROM 'inbound'
+          AND COALESCE(started_at, created_at) > now() - ($1::text || ' days')::interval
+        ORDER BY COALESCE(contact_id, phone, id), started_at DESC NULLS LAST
+     ) latest WHERE disposition_key = 'CALLBACK'`,
+    [String(days)]
   );
   return rows.map(toCall);
 }

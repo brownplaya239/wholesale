@@ -193,7 +193,12 @@ export function eodReport(all: CallRow[], day: string, x: DigestCtx, health: Hea
   return lines.join("\n");
 }
 
-export function morningDigest(recent: CallRow[], today: string, x: DigestCtx): string {
+/**
+ * `callbacks`: each contact's latest outbound call over the whole lookback
+ * (store.openCallbacks) — `recent` alone is row-capped and at ~2k dials/day
+ * only reaches back a couple of days. Defaults to deriving it from `recent`.
+ */
+export function morningDigest(recent: CallRow[], today: string, x: DigestCtx, callbacks?: CallRow[]): string {
   const out = outbound(recent);
   const yday = prevCallingDay(today);
   const prev = onDay(out, yday);
@@ -207,10 +212,18 @@ export function morningDigest(recent: CallRow[], today: string, x: DigestCtx): s
 
   // Callbacks: the latest call per contact decides — a later call means it was handled.
   const latest = new Map<string, CallRow>();
-  for (const c of out) {
+  for (const c of callbacks ? outbound(callbacks) : out) {
     const k = c.contactId ?? c.phone ?? c.id;
     const cur = latest.get(k);
     if (!cur || (c.startedAt ?? "") > (cur.startedAt ?? "")) latest.set(k, c);
+  }
+  // A call in `recent` newer than the contact's callback also clears it.
+  if (callbacks) {
+    for (const c of out) {
+      const k = c.contactId ?? c.phone ?? c.id;
+      const cur = latest.get(k);
+      if (cur && (c.startedAt ?? "") > (cur.startedAt ?? "")) latest.set(k, c);
+    }
   }
   const due: string[] = [];
   const overdue: string[] = [];
